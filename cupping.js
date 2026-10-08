@@ -16,7 +16,19 @@ window.CUP = (() => {
     good: ['꽃', '베리', '시트러스', '열대과일', '사과·배', '포도·와인', '꿀', '캐러멜', '초콜릿', '견과', '홍차', '크리미', '쥬시'],
     bad: ['풋내', '곡물·빵', '종이', '탄맛', '스모키', '떫음', '시큼함', '밋밋함', '짠맛'],
   };
+  // 맛의 색: 커피 맛 바퀴(SCA·카운터컬처)와 업계 표현 참고 — 붉은 과일은 단맛 높고 산미 부드럽고, 노랑·초록 과일은 산미가 쨍하다
+  const COLORS = [
+    { k: '빨강', c: '#e0464b', m: '붉은 과일 (딸기·체리·라즈베리), 단맛 높고 산미 부드러움' },
+    { k: '보라', c: '#8a55d0', m: '검붉은 과일 (블루베리·포도·자두·와인), 진하고 깊음' },
+    { k: '분홍', c: '#f07fae', m: '꽃 (장미·히비스커스·자스민), 가볍고 화사함' },
+    { k: '주황', c: '#f2902e', m: '오렌지·살구·복숭아·열대과일, 달콤한 산미' },
+    { k: '노랑', c: '#f2cf4a', m: '레몬·파인애플·노란 과일, 밝고 쨍한 산미' },
+    { k: '초록', c: '#5dbb5a', m: '청사과·라임·허브, 상큼하거나 풋풋함' },
+    { k: '갈색', c: '#9a6a45', m: '캐러멜·초콜릿·견과, 고소하고 달콤함' },
+    { k: '검정', c: '#2b2b2f', m: '다크초콜릿·탄맛·스모키, 쓰고 무거움' },
+  ];
   let idx = -1, cur = null, seenLen = 0;
+  const open = { color: false, tag: false, help: false };   // 접힌 칸 중 펼친 것 (다시 그려도 유지)
   const all = () => { try { return JSON.parse(localStorage.getItem('myRoasts') || '[]'); } catch { return []; } };
   // 저장된 date는 세계 표준시라 한국 시간으로
   const when = r => { const d = r.ts ? new Date(r.ts) : new Date((r.date || '').replace(' ', 'T') + 'Z'); return isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -31,9 +43,11 @@ window.CUP = (() => {
     if (c.total) parts.push(`총점 ${c.total}/5`);
     for (const it of ITEMS) if (c.s[it.k]) parts.push(`${it.k} ${c.s[it.k]}/5(1=${it.lo},5=${it.hi})`);
     const g = c.tags.filter(t => TAGS.good.includes(t)), b = c.tags.filter(t => TAGS.bad.includes(t));
+    if (c.colors?.length) parts.push('느껴진 색: ' + c.colors.map(k => { const o = COLORS.find(x => x.k === k); return o ? `${k}(${o.m})` : k; }).join(', '));
     if (g.length) parts.push('좋은 맛: ' + g.join(', '));
     if (b.length) parts.push('아쉬운 맛: ' + b.join(', '));
-    return parts.length ? '평가표 ' + parts.join(' · ') : '';
+    // 별점은 '세기'다. 바디 2점이 나쁘다는 뜻이 아니니, 좋고 나쁨은 총점·맛 단어·글로 판단하라고 알린다
+    return parts.length ? '평가표(항목 별점은 세기이지 좋고 나쁨이 아님. 좋고 나쁨은 총점, 좋은/아쉬운 맛, 사용자 글로 판단) ' + parts.join(' · ') : '';
   }
 
   function save() {
@@ -62,6 +76,14 @@ window.CUP = (() => {
         <span style="width:10px"></span>
         ${['드립', '에스프레소'].map(v => `<button class="chip hw ${cur.brew === v ? 'on' : ''}" data-f="brew" data-v="${v}">${v}</button>`).join('')}
       </div>
+      <button class="infob ${open.help ? 'open' : ''}" data-sec="help">ⓘ 별점 보는 법</button>
+      <div class="helpbox" ${open.help ? '' : 'hidden'}>
+        별점은 <b>좋고 나쁨이 아니라 얼마나 센지</b>예요.<br>
+        예를 들어 바디감 별 2개는 "가볍다"는 뜻이지 "나쁘다"는 뜻이 아니에요. 가벼운 게 좋았다면 별 2개를 누르고, 좋았다는 건 총점이나 아래 글에 적어 주세요.<br>
+        <b>총점</b>만 "얼마나 마음에 들었는지"예요.<br>
+        <span style="color:#ff8a80">빨간 별</span>(쓴맛·탄맛, 떫음·풋내)은 적을수록 좋아요.<br>
+        같은 별을 한 번 더 누르면 지워져요. 모르는 항목은 비워 둬도 돼요.
+      </div>
       <div class="cupgrid">
         <div class="cuprows">
           <div class="cuprow total"><span class="ck">총점</span><span class="stars" data-k="__total">${stars(cur.total, true, 'gold')}</span><span class="note">${['', '별로', '아쉬움', '괜찮음', '좋음', '최고'][cur.total] || '눌러서 평가'}</span></div>
@@ -69,9 +91,18 @@ window.CUP = (() => {
         </div>
         <canvas id="cupRadar"></canvas>
       </div>
-      <div class="note" style="margin-top:6px">느껴진 맛 (여러 개 눌러도 돼요)</div>
-      <div class="chips">${TAGS.good.map(t => `<button class="chip tg good ${cur.tags.includes(t) ? 'on' : ''}" data-t="${t}">${t}</button>`).join('')}</div>
-      <div class="chips">${TAGS.bad.map(t => `<button class="chip tg bad ${cur.tags.includes(t) ? 'on' : ''}" data-t="${t}">${t}</button>`).join('')}</div>`;
+      <button class="fold ${open.color ? 'open' : ''}" data-sec="color"><span class="fk">맛의 색</span><span class="fv">${(cur.colors || []).map(k => { const o = COLORS.find(x => x.k === k); return o ? `<span class="mini" style="background:${o.c}"></span>${k}` : ''; }).join(' ') || '<span class="note">눌러서 고르기</span>'}</span><span class="fa">${open.color ? '▴' : '▾'}</span></button>
+      <div class="foldbody" ${open.color ? '' : 'hidden'}>
+        <div class="colorrow">${COLORS.map(o => `<button class="csw ${(cur.colors || []).includes(o.k) ? 'on' : ''}" data-c="${o.k}" title="${o.m}"><span class="dot" style="background:${o.c}"></span><span class="cl">${o.k}</span></button>`).join('')}</div>
+        <div class="note" id="colorMean">${(cur.colors || []).map(k => COLORS.find(x => x.k === k)).filter(Boolean).map(o => `<b style="color:${o.c === '#2b2b2f' ? '#bbb' : o.c}">${o.k}</b> ${o.m}`).join('<br>') || '색을 누르면 어떤 맛인지 설명이 나와요. 여러 개 골라도 돼요'}</div>
+      </div>
+      <button class="fold ${open.tag ? 'open' : ''}" data-sec="tag"><span class="fk">느껴진 맛</span><span class="fv">${cur.tags.map(t => `<span class="${TAGS.bad.includes(t) ? 'tbad' : 'tgood'}">${t}</span>`).join('') || '<span class="note">눌러서 고르기</span>'}</span><span class="fa">${open.tag ? '▴' : '▾'}</span></button>
+      <div class="foldbody" ${open.tag ? '' : 'hidden'}>
+        <div class="note">좋은 맛</div>
+        <div class="chips">${TAGS.good.map(t => `<button class="chip tg good ${cur.tags.includes(t) ? 'on' : ''}" data-t="${t}">${t}</button>`).join('')}</div>
+        <div class="note" style="margin-top:8px">아쉬운 맛</div>
+        <div class="chips">${TAGS.bad.map(t => `<button class="chip tg bad ${cur.tags.includes(t) ? 'on' : ''}" data-t="${t}">${t}</button>`).join('')}</div>
+      </div></div>`;
     $('cupWhich').onchange = e => { idx = +e.target.value; render(); };
     $('cupForm').querySelectorAll('.stars').forEach(box => box.querySelectorAll('.star').forEach(b => b.onclick = () => {
       const k = box.dataset.k, v = +b.dataset.v;
@@ -82,6 +113,12 @@ window.CUP = (() => {
     $('cupForm').querySelectorAll('.hw').forEach(b => b.onclick = () => {
       const f = b.dataset.f, v = b.dataset.v; cur[f] = cur[f] === v ? '' : v;
       try { localStorage.setItem(f === 'serve' ? 'cupServe' : 'cupBrew', cur[f]); } catch {}
+      save(); render();
+    });
+    $('cupForm').querySelectorAll('.infob').forEach(b => b.onclick = () => { open.help = !open.help; render(); });
+    $('cupForm').querySelectorAll('.fold').forEach(b => b.onclick = () => { open[b.dataset.sec] = !open[b.dataset.sec]; render(); });
+    $('cupForm').querySelectorAll('.csw').forEach(b => b.onclick = () => {
+      const k = b.dataset.c, a = cur.colors || []; cur.colors = a.includes(k) ? a.filter(x => x !== k) : [...a, k];
       save(); render();
     });
     $('cupForm').querySelectorAll('.tg').forEach(b => b.onclick = () => {
