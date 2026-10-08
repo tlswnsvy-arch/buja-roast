@@ -175,7 +175,7 @@ function renderRec() {
   // 읽기 쉽게: 요약 → 설정값(가장 중요) → 예상 → 접을 수 있는 설명 상자들
   $('rec').innerHTML = `
     <div class="recsec">
-      <div class="row"><div class="rech" style="flex:1">요약</div><button class="say" data-say="summary" aria-label="읽어주기">🔊</button><button id="readRec">🔊 전체</button></div>
+      <div class="row"><div class="rech" style="flex:1">요약</div><button class="say" data-say="summary" aria-label="읽어주기">🔊</button><button id="readRec">🔊 전체</button><button id="detailBtn">📖 자세히 설명</button></div>
       <div>${esc(clean(r.summary))}</div>
       ${r.level ? `<div class="recline"><b>배전도</b> ${esc(r.level)}${r.levelWhy ? `<div class="note">${esc(r.levelWhy)}</div>` : ''}</div>` : ''}
       ${r.speed ? `<div class="steps"><span class="step">${esc(r.type)}</span><span class="step">속도 ${esc(r.speed)}</span><span class="step">DT ${esc(r.dtSec)}초</span><span class="step">1차 크랙 뒤 +${esc(r.rise)}도</span></div>` : ''}
@@ -200,7 +200,8 @@ function renderRec() {
     ${r.flavor ? `<div class="recsec"><div class="row"><div class="rech" style="flex:1">예상 맛</div><button class="say" data-say="flavor" aria-label="읽어주기">🔊</button></div><div>${esc(r.flavor)}</div></div>` : ''}
     <details class="recsec"><summary class="rech">왜 이렇게 정했나요? <button class="say" data-say="why" aria-label="읽어주기">🔊</button></summary>${list(r.why)}</details>
     <details class="recsec" open><summary class="rech">볶는 중 볼 것 <button class="say" data-say="watch" aria-label="읽어주기">🔊</button></summary>${list(r.watch)}</details>
-    ${r.nextTry ? `<div class="recsec"><div class="row"><div class="rech" style="flex:1">다음 배치 실험</div><button class="say" data-say="next" aria-label="읽어주기">🔊</button></div><div>${esc(r.nextTry)}</div></div>` : ''}`;
+    ${r.nextTry ? `<div class="recsec"><div class="row"><div class="rech" style="flex:1">다음 배치 실험</div><button class="say" data-say="next" aria-label="읽어주기">🔊</button></div><div>${esc(r.nextTry)}</div></div>` : ''}
+    ${r.detail?.length ? `<details class="recsec" open><summary class="rech">자세한 설명 <button class="say" data-say="detail" aria-label="읽어주기">🔊</button></summary>${r.detail.map(d => `<div style="margin-top:8px"><b>${esc(d.title)}</b><div>${esc(d.text)}</div></div>`).join('')}</details>` : ''}`;
   $('undoRec').onclick = undoRec;
   const steps = (r.steps || []).map(s => `원두 ${s.bt}도에서 버너 ${s.burner}퍼센트`).join(', ');
   const say = {
@@ -210,9 +211,11 @@ function renderRec() {
     why: r.why?.length && '이렇게 정한 이유. ' + r.why.join('. ') + '.',
     watch: r.watch?.length && '볶는 중 볼 것. ' + r.watch.join('. ') + '.',
     next: r.nextTry && '다음 배치 실험. ' + r.nextTry,
+    detail: r.detail?.length && r.detail.map(d => d.title + '. ' + d.text).join(' '),
   };
   const read = text => { ALARM.unlock(); ALARM.stopSpeaking?.(); if (text) ALARM.speak(text); };
   $('rec').querySelectorAll('.say').forEach(b => b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); read(say[b.dataset.say]); }));
+  $('detailBtn').onclick = () => explainRec();
   $('readRec').onclick = () => read(['summary', 'settings', 'flavor', 'watch', 'next'].map(k => say[k]).filter(Boolean).join(' '));
   $('rec').querySelectorAll('.recnum').forEach(inp => inp.addEventListener('change', () => {
     const k = inp.dataset.k, v = +inp.value; if (!isFinite(v)) return;
@@ -248,6 +251,24 @@ function undoRec() {
   const h = store.get('recHistory', []), last = h.pop(); if (!last) return log('되돌릴 게 없어요');
   store.set('recHistory', h); lastRec = last.rec; store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
   log('되돌림: ' + last.why);
+}
+
+// 레시피를 단계별로 풀어 설명 (초보가 왜 이렇게 볶는지 이해하도록). 한 번 받으면 레시피에 저장
+async function explainRec() {
+  const r = lastRec; if (!r) return;
+  const btn = $('detailBtn'); btn.disabled = true; btn.textContent = '📖 설명 만드는 중...';
+  try {
+    const d = await gemini([{ role: 'user', parts: [{ text: `${beanText()}
+${wxText()}
+지금 레시피: ${JSON.stringify({ level: r.level, type: r.type, speed: r.speed, charge: r.charge, startBurner: r.startBurner, steps: r.steps, drop: r.drop, rise: r.rise, dtSec: r.dtSec, damper: r.damper, expected: r.expected, flavor: r.flavor })}
+사용자는 홈로스팅 초보다. 이 레시피가 왜 이렇게 짜였는지 단계별로 자세히 풀어서 설명해라. 각 항목은 2~4문장, 숫자 근거와 컵에서 느껴질 맛의 연결을 꼭 넣어라.
+항목: 1) 이 생두를 어떻게 봤는지(가공·품종·원하는 맛) 2) 투입 온도와 시작 버너의 의도 3) 버너 단계 하나하나의 의도(어느 구간에서 무엇을 노리는지) 4) 1차 크랙 뒤 상승폭과 DT의 의도 5) 따른 고수 방식과 이유(내부 이름 쓰지 말고 '부자로스터 가이드 방식'처럼) 6) 이 생두·레시피에서 조심할 점 7) 마셔보고 이렇다면 다음엔 이렇게(2~3가지)
+JSON으로만: {"detail":[{"title":"짧은 제목","text":"설명"}]}` }] }], { json: true, system: SYSTEM });
+    if (Array.isArray(d.detail) && d.detail.length) {
+      lastRec.detail = d.detail.map(x => ({ title: String(x.title || ''), text: String(x.text || '') }));
+      store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
+    } else throw new Error('설명이 비어 있어요');
+  } catch (e) { btn.disabled = false; btn.textContent = '📖 다시 시도'; log('설명 실패: ' + e.message); }
 }
 
 // 같은 생두는 마지막(고친/적용한) 프로파일을 기억해서 다음 배치에 바로 쓴다
