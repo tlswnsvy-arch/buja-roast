@@ -142,8 +142,14 @@ window.AUTO = (() => {
 
   function start() {
     const r = lastRec;
-    if (window.autoSaveBean) autoSaveBean(true);   // 볶은 생두는 목록에 자동으로 남긴다
     if (!r || !r.charge || !r.steps?.length) return say('먼저 AI 프로파일 추천을 받으세요');
+    // 레시피를 만든 생두·투입량과 지금 칸이 다르면 먼저 확인
+    const warn = [];
+    const amt = +$('bAmt').value, rAmt = +(r.bean?.amt || 0), name = $('bName').value.trim(), rName = (r.bean?.name || '').trim();
+    if (rAmt && amt && rAmt !== amt) warn.push(`이 레시피는 ${rAmt}g 기준인데 지금 투입량은 ${amt}g이에요. 양이 다르면 시간과 온도가 달라져요.`);
+    if (rName && name && rName !== name) warn.push(`이 레시피는 "${rName}" 생두용인데 지금 생두는 "${name}"이에요.`);
+    if (warn.length && !confirm(warn.join('\n') + '\n\n그래도 이 레시피로 시작할까요?')) return;
+    if (window.autoSaveBean) autoSaveBean(true);   // 볶은 생두는 목록에 자동으로 남긴다 (취소하면 저장 안 함)
     begin('full', +r.charge);
   }
   function preheatOnly() {

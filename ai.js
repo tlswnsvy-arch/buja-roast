@@ -518,7 +518,11 @@ window.onMark = async name => {
 };
 
 // ---------- 화면 연결 ----------
-$('recBtn').onclick = recommend;
+// 이미 레시피가 있으면 바뀐다고 먼저 알린다 (마음에 드는 레시피를 실수로 덮어쓰지 않게)
+$('recBtn').onclick = () => {
+  if (lastRec?.charge && !confirm('지금 레시피가 새 추천으로 바뀌어요.\n마음에 드는 레시피라 그대로 볶고 싶으면 "취소"를 누르세요.\n(바뀐 뒤에도 "되돌리기"로 돌아갈 수 있어요)')) return;
+  recommend();
+};
 $('askBtn').onclick = () => { const q = $v('ask'); $('ask').value = ''; ask(q); };
 $('ask').addEventListener('keydown', e => { if (e.key === 'Enter') $('askBtn').click(); });
 $('keySave').onclick = () => {
