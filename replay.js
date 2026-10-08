@@ -17,15 +17,15 @@ window.REPLAY = (() => {
     const cv = $('replayChart'), dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
     cv.width = W * dpr; cv.height = H * dpr;
     const g = cv.getContext('2d'); g.scale(dpr, dpr);
-    g.fillStyle = '#1f1f23'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#272930'; g.fillRect(0, 0, W, H);
     if (!rec) return;
     const curve = rec.curve.filter(c => c[0] >= -30);
     const end = curve.at(-1)?.[0] ?? 600, tMin = -30, tMax = Math.max(480, end + 20);
     const L = 40, R = 40, T = 34, B = 46, w = W - L - R, h = H - T - B;
     const x = s => L + (s - tMin) / (tMax - tMin) * w, y = v => T + h - v / 250 * h, yr = v => T + h - Math.max(-2, Math.min(52, v)) / 50 * h;
     g.font = '11px sans-serif'; g.lineWidth = 1;
-    for (let v = 0; v <= 250; v += 25) { g.strokeStyle = v % 50 ? 'rgba(255,255,255,.05)' : '#33333a'; g.beginPath(); g.moveTo(L, y(v)); g.lineTo(W - R, y(v)); g.stroke(); g.fillStyle = '#9b9ba3'; g.fillText(v, 8, y(v) + 4); g.fillText(v / 5, W - R + 8, y(v) + 4); }
-    for (let s = 0; s <= tMax; s += 60) { g.strokeStyle = 'rgba(255,255,255,.06)'; g.beginPath(); g.moveTo(x(s), T); g.lineTo(x(s), T + h); g.stroke(); g.fillStyle = '#9b9ba3'; g.fillText(fmt(s), x(s) - 11, T + h + 14); }
+    for (let v = 0; v <= 250; v += 25) { g.strokeStyle = v % 50 ? 'rgba(255,255,255,.05)' : '#3a3d47'; g.beginPath(); g.moveTo(L, y(v)); g.lineTo(W - R, y(v)); g.stroke(); g.fillStyle = '#a7abb6'; g.fillText(v, 8, y(v) + 4); g.fillText(v / 5, W - R + 8, y(v) + 4); }
+    for (let s = 0; s <= tMax; s += 60) { g.strokeStyle = 'rgba(255,255,255,.06)'; g.beginPath(); g.moveTo(x(s), T); g.lineTo(x(s), T + h); g.stroke(); g.fillStyle = '#a7abb6'; g.fillText(fmt(s), x(s) - 11, T + h + 14); }
     const ev = { 투입: { t: 0, bt: rec.charge }, TP: parse(rec.tp), '1차 크랙': parse(rec.fc), 배출: parse(rec.drop) };
     // 구간 배경 (건조·마이야르·디벨롭)
     const yp = curve.find(c => c[0] > 30 && c[1] >= 155), fc = ev['1차 크랙'], dr = ev.배출;
@@ -43,7 +43,7 @@ window.REPLAY = (() => {
     g.fillStyle = '#f4f4f6';
     for (const [k, v] of Object.entries(ev)) {
       if (!v || v.t > t) continue;
-      g.strokeStyle = '#9b9ba3'; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(x(v.t), T); g.lineTo(x(v.t), T + h); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = '#a7abb6'; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(x(v.t), T); g.lineTo(x(v.t), T + h); g.stroke(); g.setLineDash([]);
       g.save(); g.translate(x(v.t) + 4, T + 6); g.rotate(Math.PI / 2); g.fillText(`${k} ${v.bt}° ${fmt(v.t)}`, 0, 0); g.restore();
     }
     // 위쪽 큰 글씨: 시간, BT, ET, 버너, 구간

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>부자 AI 로스팅</title>
-<link rel="stylesheet" href="style.css?v=37">
+<link rel="stylesheet" href="style.css?v=39">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -110,13 +110,13 @@
     <section class="card">
       <h2>1. 생두</h2>
       <div class="row">
-        <button id="beanOpen" style="flex:1;text-align:left">🫘 내 생두에서 고르기 ▾</button>
+        <button id="beanOpen" style="flex:1;text-align:left"><svg class="beanico" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="6.6" ry="9" transform="rotate(28 12 12)" fill="#8a5a3c"/><path d="M8.6 5.6c3 2.6.6 6.6 3.6 8.6 2.2 1.5 1.6 4.4.4 6.4" fill="none" stroke="#2a1a12" stroke-width="1.6" stroke-linecap="round"/></svg>내 생두에서 고르기 ▾</button>
         <button id="beanNew">＋ 새 생두</button>
       </div>
       <div id="beanPanel" class="beanpanel" hidden></div>
       <div class="row">
-        <label class="chip pick">📷 사진 찍어 채우기<input type="file" id="beanPhoto" accept="image/*" capture="environment" hidden></label>
-        <label class="chip pick">🖼 앨범에서 채우기<input type="file" id="beanAlbum" accept="image/*" hidden></label>
+        <label class="chip pick"><svg class="lineico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>사진 찍어 채우기<input type="file" id="beanPhoto" accept="image/*" capture="environment" hidden></label>
+        <label class="chip pick"><svg class="lineico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.7"/><path d="m4 18 5-5 4 4 3-3 4 4"/></svg>앨범에서 채우기<input type="file" id="beanAlbum" accept="image/*" hidden></label>
         <span style="flex:1"></span>
         <button id="beanSave">저장</button>
         <button id="beanDel">삭제</button>
@@ -560,7 +560,7 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=49"></script>
+<script src="ai.js?v=51"></script>
 <script src="control.js?v=32"></script>
 <script src="auto.js?v=42"></script>
 <script src="replay.js?v=43"></script>

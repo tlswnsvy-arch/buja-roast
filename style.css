@@ -175,3 +175,8 @@ button.go { background:linear-gradient(180deg, #3a9a4a, #2b7d39); border-color:#
 /* 표·목록 버튼처럼 납작해야 하는 것은 그림자 없이 */
 #tabs button, .beanrow, .star, .say, .chip, .evbtns button { box-shadow:none; }
 #tabs button:not(.on), .beanrow, .star { background:none; }
+
+#beanOpen { display:flex; align-items:center; gap:8px; }
+.beanico { width:22px; height:22px; flex:none; }
+.chip.pick { display:inline-flex; align-items:center; gap:6px; }
+.lineico { width:18px; height:18px; flex:none; color:var(--gold); }

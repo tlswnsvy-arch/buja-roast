@@ -560,7 +560,8 @@ function beanList() {
   return { saved, fromHist };
 }
 // 내 생두 목록: 버튼을 누르면 펼쳐지고, 예전 로스팅 기록은 접힌 폴더 안에
-let pickedBean = '';   // 's3' 저장한 생두, 'h2' 예전 기록
+let pickedBean = '';
+const BEAN_ICON = '<svg class="beanico" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="6.6" ry="9" transform="rotate(28 12 12)" fill="#8a5a3c"/><path d="M8.6 5.6c3 2.6.6 6.6 3.6 8.6 2.2 1.5 1.6 4.4.4 6.4" fill="none" stroke="#2a1a12" stroke-width="1.6" stroke-linecap="round"/></svg>';   // 's3' 저장한 생두, 'h2' 예전 기록
 function renderBeans() {
   const { saved, fromHist } = beanList(), profs = store.get('beanProfiles', {});
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -570,7 +571,7 @@ function renderBeans() {
     (fromHist.length ? `<details class="beanfold"><summary>📁 예전 로스팅 기록에서 (${fromHist.length}개)</summary>${fromHist.map((b, i) => `<button class="beanrow" data-v="h${i}"><span>${esc(b.name)}</span></button>`).join('')}</details>` : '');
   $('beanPanel').querySelectorAll('.beanrow').forEach(b => b.onclick = () => pickBean(b.dataset.v));
   const cur = pickedBean[0] === 's' ? saved[+pickedBean.slice(1)] : null;
-  $('beanOpen').textContent = cur ? `🫘 ${cur.name} ▾` : '🫘 내 생두에서 고르기 ▾';
+  $('beanOpen').innerHTML = BEAN_ICON + (cur ? `${esc(cur.name)} ▾` : '내 생두에서 고르기 ▾');
 }
 $('beanOpen').onclick = () => { $('beanPanel').hidden = !$('beanPanel').hidden; };
 // 생두 칸 비우기 (투입량·배전도·마시는 방법은 그대로). 레시피도 그 생두 것이 아니면 비운다
