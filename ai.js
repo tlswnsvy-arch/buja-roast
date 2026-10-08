@@ -147,6 +147,7 @@ JSON으로만 답해라:
 "expected":{"tpSec":초,"tpTemp":온도,"fcSec":초,"fcTemp":온도,"dropSec":초},"dtr":목표DTR%,"nextTry":"이번 결과를 커핑한 뒤 다음 배치에서 바꿔볼 한 가지",
 "why":["이유 2~4개"],"watch":["로스팅 중 볼 것 2~4개(언제 무엇을 하면 되는지)"],"flavor":"예상되는 맛"}`;
     const r = await gemini([{ role: 'user', parts: [{ text: prompt }] }], { json: true, system: SYSTEM });
+    pushHistory('새 추천 받기 전');
     lastRec = { ...r, bean: readBean(), at: new Date().toISOString() };
     store.set('lastRec', lastRec);
     saveBeanProfile();
@@ -164,28 +165,42 @@ function renderRec() {
   const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const num = (k, v) => `<input class="recnum" data-k="${k}" type="number" value="${esc(v)}" style="width:64px;padding:4px 6px;display:inline-block">`;
   $('rec').style.whiteSpace = 'normal';
+  const list = arr => (arr || []).length ? '<ul>' + arr.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '';
+  const hist = store.get('recHistory', []).length;
+  // 읽기 쉽게: 요약 → 설정값(가장 중요) → 예상 → 접을 수 있는 설명 상자들
   $('rec').innerHTML = `
-    <div>${esc(r.summary)}</div>
-    ${r.level ? `<div style="margin-top:6px">배전도: ${esc(r.level)}${r.levelWhy ? ' · ' + esc(r.levelWhy) : ''}</div>` : ''}
-    ${r.speed ? `<div class="steps">${r.approach ? `<span class="step">${esc(r.approach)}</span>` : ''}<span class="step">${esc(r.type)}</span><span class="step">속도 ${esc(r.speed)}</span><span class="step">DT ${esc(r.dtSec)}초</span><span class="step">1차 크랙 뒤 +${esc(r.rise)}도</span></div>` : ''}
-    <div class="note" style="margin-top:8px">자동 로스팅·부자 앱에 쓸 값 (숫자를 눌러 바로 고칠 수 있어요)${r.edited ? ' · <b style="color:#d9a441">고친 값</b>' : ''}</div>
-    <div class="steps">
-      <span class="step">투입 ${num('charge', r.charge)}°C</span>
-      <span class="step">시작 버너 ${num('startBurner', r.startBurner ?? 100)}%</span>
-      ${(r.steps || []).map((s, i) => `<span class="step">BT ${num('s' + i + 'bt', s.bt)}°C → ${num('s' + i + 'burner', s.burner)}%</span>`).join('')}
-      <span class="step">배출 ${num('drop', r.drop)}°C</span>
-      <span class="step">1차 크랙 뒤 +${num('rise', r.rise ?? 8)}도</span>
-      <span class="step">DT ${num('dtSec', r.dtSec ?? 60)}초</span>
-      ${r.damper ? `<span class="step">댐퍼 ${esc(r.damper)}</span>` : ""}
+    <div class="recsec">
+      <div class="rech">요약</div>
+      <div>${esc(r.summary)}</div>
+      ${r.level ? `<div class="recline"><b>배전도</b> ${esc(r.level)}${r.levelWhy ? `<div class="note">${esc(r.levelWhy)}</div>` : ''}</div>` : ''}
+      ${r.speed ? `<div class="steps"><span class="step">${esc(r.type)}</span><span class="step">속도 ${esc(r.speed)}</span><span class="step">DT ${esc(r.dtSec)}초</span><span class="step">1차 크랙 뒤 +${esc(r.rise)}도</span></div>` : ''}
+      ${r.approach ? `<div class="note">${esc(r.approach)}</div>` : ''}
     </div>
-    <div class="note">예상: TP ${e.tpSec ? mmss(e.tpSec) : '-'} · 1차 크랙 ${e.fcTemp || '-'}°C ${e.fcSec ? mmss(e.fcSec) : '-'} · 배출 ${e.dropSec ? mmss(e.dropSec) : '-'} · DTR ${esc(r.dtr)}%</div>
-    <div style="margin-top:8px">왜 이렇게?<br>${(r.why || []).map(x => '· ' + esc(x)).join('<br>')}</div>
-    <div style="margin-top:8px">볶는 중 볼 것<br>${(r.watch || []).map(x => '· ' + esc(x)).join('<br>')}</div>
-    <div style="margin-top:8px">예상 맛: ${esc(r.flavor)}</div>
-    ${r.nextTry ? `<div style="margin-top:8px" class="note">다음 배치 실험: ${esc(r.nextTry)}</div>` : ''}`;
+    <div class="recsec" style="border:1px solid #4a3d1d">
+      <div class="row"><div class="rech" style="flex:1">로스팅 설정값 ${r.edited ? '<span style="color:#d9a441;font-size:13px">· 고친 값</span>' : ''}</div>
+        <button id="undoRec" ${hist ? '' : 'disabled'}>되돌리기${hist ? ' (' + hist + ')' : ''}</button></div>
+      <div class="note">숫자를 눌러 바로 고칠 수 있어요. 자동 로스팅이 이 값으로 볶아요.</div>
+      <div class="steps">
+        <span class="step">투입 ${num('charge', r.charge)}°C</span>
+        <span class="step">시작 버너 ${num('startBurner', r.startBurner ?? 100)}%</span>
+        <span class="step">배출 ${num('drop', r.drop)}°C</span>
+        <span class="step">1차 크랙 뒤 +${num('rise', r.rise ?? 8)}도</span>
+        <span class="step">DT ${num('dtSec', r.dtSec ?? 60)}초</span>
+      </div>
+      <div class="note">버너 단계</div>
+      <div class="steps">${(r.steps || []).map((s, i) => `<span class="step">BT ${num('s' + i + 'bt', s.bt)}°C → ${num('s' + i + 'burner', s.burner)}%</span>`).join('')}</div>
+      ${r.damper ? `<div class="recline"><b>댐퍼</b> ${esc(r.damper)}</div>` : ''}
+      <div class="recline"><b>예상</b> TP ${e.tpSec ? mmss(e.tpSec) : '-'} · 1차 크랙 ${e.fcTemp || '-'}°C ${e.fcSec ? mmss(e.fcSec) : '-'} · 배출 ${e.dropSec ? mmss(e.dropSec) : '-'} · DTR ${esc(r.dtr)}%</div>
+    </div>
+    ${r.flavor ? `<div class="recsec"><div class="rech">예상 맛</div><div>${esc(r.flavor)}</div></div>` : ''}
+    <details class="recsec"><summary class="rech">왜 이렇게 정했나요?</summary>${list(r.why)}</details>
+    <details class="recsec" open><summary class="rech">볶는 중 볼 것</summary>${list(r.watch)}</details>
+    ${r.nextTry ? `<div class="recsec"><div class="rech">다음 배치 실험</div><div>${esc(r.nextTry)}</div></div>` : ''}`;
+  $('undoRec').onclick = undoRec;
   $('rec').querySelectorAll('.recnum').forEach(inp => inp.addEventListener('change', () => {
     const k = inp.dataset.k, v = +inp.value; if (!isFinite(v)) return;
-    const m = k.match(/^s(d+)(bt|burner)$/);
+    pushHistory('숫자 고침');
+    const m = k.match(/^s(\d+)(bt|burner)$/);
     if (m) lastRec.steps[+m[1]][m[2]] = v; else lastRec[k] = v;
     lastRec.edited = true; store.set('lastRec', lastRec); saveBeanProfile(); renderRec(); log('추천값 고침: ' + k + ' = ' + v);
   }));
@@ -207,6 +222,17 @@ function renderRec() {
   }
 }
 
+// 되돌리기: 추천값이 바뀌기 직전 모습을 쌓아 두고 한 단계씩 되돌린다
+function pushHistory(why) {
+  if (!lastRec) return;
+  const h = store.get('recHistory', []); h.push({ why, rec: JSON.parse(JSON.stringify(lastRec)) }); store.set('recHistory', h.slice(-30));
+}
+function undoRec() {
+  const h = store.get('recHistory', []), last = h.pop(); if (!last) return log('되돌릴 게 없어요');
+  store.set('recHistory', h); lastRec = last.rec; store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
+  log('되돌림: ' + last.why);
+}
+
 // 같은 생두는 마지막(고친/적용한) 프로파일을 기억해서 다음 배치에 바로 쓴다
 function saveBeanProfile() {
   const name = $v('bName'); if (!name || !lastRec) return;
@@ -226,20 +252,35 @@ ${$v('cupNote') ? '사용자 맛 평가: ' + $v('cupNote') : '아직 맛 평가 
 JSON으로만: {"good":["잘된 점 1~2개"],"bad":["아쉬운 점 1~2개"],"changes":[{"label":"버튼에 쓸 짧은 문장","why":"이유 한 줄","patch":{"바꿀 키만":"값"}}]}
 patch에 쓸 수 있는 키: charge, startBurner, steps(전체 배열 [{bt,burner}]), drop, rise, dtSec. 숫자로.` }] }], { json: true, system: SYSTEM });
     const esc = t => String(t ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-    box.innerHTML = `<div style="font-weight:600">이번 배치 리뷰</div>
-      <div>잘된 점<br>${(r.good || []).map(x => '· ' + esc(x)).join('<br>')}</div>
-      <div>아쉬운 점<br>${(r.bad || []).map(x => '· ' + esc(x)).join('<br>')}</div>
-      <div class="note">다음 배치에 반영할 것을 고르세요 (하나만 고르는 걸 추천해요)</div>
-      ${(r.changes || []).map((c, i) => `<div class="row"><button data-apply="${i}">적용</button><span>${esc(c.label)} <span class="note">${esc(c.why)}</span></span></div>`).join('')}`;
-    box.querySelectorAll('[data-apply]').forEach(b => b.addEventListener('click', () => {
-      const c = r.changes[+b.dataset.apply], p = c.patch || {}, ok = {};
-      for (const k of ['charge', 'startBurner', 'drop', 'rise', 'dtSec']) if (isFinite(+p[k]) && p[k] !== '' && p[k] != null) ok[k] = +p[k];
-      if (Array.isArray(p.steps) && p.steps.every(x => isFinite(+x.bt) && isFinite(+x.burner))) ok.steps = p.steps.map(x => ({ bt: +x.bt, burner: Math.max(0, Math.min(100, +x.burner)) }));
-      Object.assign(lastRec, ok, { edited: true, lastChange: c.label });
-      store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
-      b.textContent = '적용됨'; b.disabled = true;
-      log('다음 배치에 적용: ' + c.label + ' ' + JSON.stringify(ok));
-    }));
+    const li = arr => '<ul>' + (arr || []).map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
+    box.innerHTML = `<div class="recsec"><div class="rech">이번 배치 리뷰</div>
+      <div><b>잘된 점</b>${li(r.good)}</div>
+      <div><b>아쉬운 점</b>${li(r.bad)}</div></div>
+      <div class="recsec"><div class="rech">다음 배치에 반영할 것</div>
+      <div class="note">하나만 고르는 걸 추천해요. 잘못 눌렀으면 다시 누르면 취소돼요.</div>
+      ${(r.changes || []).map((c, i) => `<div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;padding:6px 0;border-top:1px solid var(--line)"><button data-apply="${i}">적용</button><div><div>${esc(c.label)}</div><div class="note">${esc(c.why)}</div></div></div>`).join('')}</div>`;
+    // 적용 ↔ 취소: 다시 누르면 그 변경이 바꾼 값만 원래대로
+    box.querySelectorAll('[data-apply]').forEach(b => {
+      let before = null;
+      b.addEventListener('click', () => {
+        const c = r.changes[+b.dataset.apply];
+        if (before) {
+          Object.assign(lastRec, JSON.parse(JSON.stringify(before)));
+          store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
+          before = null; b.textContent = '적용'; b.style.background = '';
+          return log('적용 취소: ' + c.label);
+        }
+        const p = c.patch || {}, ok = {};
+        for (const k of ['charge', 'startBurner', 'drop', 'rise', 'dtSec']) if (isFinite(+p[k]) && p[k] !== '' && p[k] != null) ok[k] = +p[k];
+        if (Array.isArray(p.steps) && p.steps.every(x => isFinite(+x.bt) && isFinite(+x.burner))) ok.steps = p.steps.map(x => ({ bt: +x.bt, burner: Math.max(0, Math.min(100, +x.burner)) }));
+        pushHistory('적용: ' + c.label);
+        before = JSON.parse(JSON.stringify(Object.fromEntries(Object.keys(ok).map(k => [k, lastRec[k]]))));
+        Object.assign(lastRec, ok, { edited: true, lastChange: c.label });
+        store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
+        b.textContent = '적용됨 · 다시 누르면 취소'; b.style.background = '#2e5d32';
+        log('다음 배치에 적용: ' + c.label + ' ' + JSON.stringify(ok));
+      });
+    });
   } catch (e) { box.innerHTML = '<div class="note">리뷰 실패: ' + e.message + '</div>'; }
 }
 

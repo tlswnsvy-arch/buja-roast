@@ -42,7 +42,16 @@
   label { font-size:13px; color:var(--dim); display:grid; gap:4px; }
   input, textarea, select { background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-size:15px; font-family:inherit; width:100%; }
   textarea { min-height:60px; resize:vertical; }
-  #rec { font-size:15px; line-height:1.6; }
+  #rec { font-size:15px; line-height:1.6; display:grid; gap:10px; }
+  .recsec { background:var(--bg); border-radius:10px; padding:12px 14px; display:grid; gap:6px; }
+  .rech { font-size:15px; font-weight:700; color:#ffd88a; cursor:default; }
+  details.recsec > summary { cursor:pointer; list-style:none; }
+  details.recsec > summary::before { content:'▸ '; color:var(--dim); }
+  details[open].recsec > summary::before { content:'▾ '; }
+  .recsec ul { margin:4px 0 0; padding-left:20px; display:grid; gap:6px; }
+  .recline { margin-top:2px; }
+  #review { font-size:15px; }
+  #review ul { margin:4px 0 0; padding-left:20px; display:grid; gap:4px; }
   #rec .steps { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0; }
   #rec .step { background:var(--bg); border-radius:8px; padding:8px 12px; font-variant-numeric:tabular-nums; }
   #chat { display:grid; gap:8px; max-height:420px; overflow:auto; }
@@ -457,8 +466,8 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=11"></script>
-<script src="control.js?v=11"></script>
-<script src="auto.js?v=11"></script>
+<script src="ai.js?v=12"></script>
+<script src="control.js?v=12"></script>
+<script src="auto.js?v=12"></script>
 </body>
 </html>
