@@ -256,19 +256,51 @@ function undoRec() {
 // 레시피를 단계별로 풀어 설명 (초보가 왜 이렇게 볶는지 이해하도록). 한 번 받으면 레시피에 저장
 async function explainRec() {
   const r = lastRec; if (!r) return;
-  const btn = $('detailBtn'); btn.disabled = true; btn.textContent = '📖 설명 만드는 중...';
-  try {
-    const d = await gemini([{ role: 'user', parts: [{ text: `${beanText()}
+  const btn = $('detailBtn'); btn.disabled = true; btn.textContent = '📖 쓰는 중...';
+  // 설명 상자를 먼저 만들고, AI가 쓰는 대로 채운다
+  let box = document.getElementById('detailLive');
+  if (!box) { box = document.createElement('details'); box.id = 'detailLive'; box.className = 'recsec'; box.open = true; $('rec').appendChild(box); }
+  box.innerHTML = '<summary class="rech">자세한 설명 (쓰는 중...)</summary><div id="detailText" style="white-space:pre-wrap;line-height:1.7"></div>';
+  // 생각하는 동안 시간 표시 (글이 나오기 시작하면 멈춤)
+  const t0 = Date.now(), tick = setInterval(() => { const el = $('detailText'); if (el && !el.dataset.got) el.textContent = `AI가 레시피를 다시 살펴보며 생각 중이에요… ${Math.round((Date.now() - t0) / 1000)}초 (보통 1~2분)`; }, 1000);
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const prompt = `${beanText()}
 ${wxText()}
 지금 레시피: ${JSON.stringify({ level: r.level, type: r.type, speed: r.speed, charge: r.charge, startBurner: r.startBurner, steps: r.steps, drop: r.drop, rise: r.rise, dtSec: r.dtSec, damper: r.damper, expected: r.expected, flavor: r.flavor })}
-사용자는 홈로스팅 초보다. 이 레시피가 왜 이렇게 짜였는지 단계별로 자세히 풀어서 설명해라. 각 항목은 2~4문장, 숫자 근거와 컵에서 느껴질 맛의 연결을 꼭 넣어라.
-항목: 1) 이 생두를 어떻게 봤는지(가공·품종·원하는 맛) 2) 투입 온도와 시작 버너의 의도 3) 버너 단계 하나하나의 의도(어느 구간에서 무엇을 노리는지) 4) 1차 크랙 뒤 상승폭과 DT의 의도 5) 따른 고수 방식과 이유(내부 이름 쓰지 말고 '부자로스터 가이드 방식'처럼) 6) 이 생두·레시피에서 조심할 점 7) 마셔보고 이렇다면 다음엔 이렇게(2~3가지)
-JSON으로만: {"detail":[{"title":"짧은 제목","text":"설명"}]}` }] }], { json: true, system: SYSTEM });
-    if (Array.isArray(d.detail) && d.detail.length) {
-      lastRec.detail = d.detail.map(x => ({ title: String(x.title || ''), text: String(x.text || '') }));
-      store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
-    } else throw new Error('설명이 비어 있어요');
-  } catch (e) { btn.disabled = false; btn.textContent = '📖 다시 시도'; log('설명 실패: ' + e.message); }
+사용자는 홈로스팅 초보다. 이 레시피가 왜 이렇게 짜였는지 단계별로 풀어서 설명해라. 각 항목 2~3문장, 숫자 근거와 컵에서 느껴질 맛의 연결을 넣어라.
+항목: 이 생두를 어떻게 봤는지 / 투입 온도와 시작 버너 / 버너 단계 하나하나의 의도 / 1차 크랙 뒤 상승폭과 DT / 따른 방식과 이유('부자로스터 가이드 방식'처럼 자연스럽게) / 조심할 점 / 마셔보고 이렇다면 다음엔 이렇게
+형식: 각 항목을 '## 제목' 한 줄 다음에 설명. 다른 꾸밈(굵은 글씨, 표, 목록 기호)은 쓰지 마라.`;
+  try {
+    const key = store.get('gemKey', '');
+    if (!key) throw new Error('Gemini 키가 없어요');
+    let full = '', ok = false;
+    // 사용자 선택: 조금 걸려도 똑똑한 모델로 (3.8-flash는 생각이 길어 1~2분). 안 되면 가벼운 모델
+    for (const m of [...MODELS, 'gemini-flash-lite-latest']) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:streamGenerateContent?alt=sse`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], systemInstruction: { parts: [{ text: SYSTEM }] }, generationConfig: { temperature: 0.5 } }),
+      });
+      if (!res.ok) { log(`설명 ${m} ${res.status}`); continue; }
+      const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
+      for (;;) {
+        const { value, done } = await reader.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+          if (!line.startsWith('data:')) continue;
+          try { full += (JSON.parse(line.slice(5)).candidates?.[0]?.content?.parts || []).map(p => p.text || '').join(''); } catch {}
+          if (full) { $('detailText').dataset.got = '1'; $('detailText').textContent = full.replace(/^##\s*/gm, '▶ '); }
+        }
+      }
+      ok = full.trim().length > 0; if (ok) break;
+    }
+    clearInterval(tick);
+    if (!ok) throw new Error('설명을 받지 못했어요');
+    // '## 제목' 단위로 나눠 저장 (읽어주기·다음에 다시 보기용)
+    lastRec.detail = full.split(/^##\s*/m).map(x => x.trim()).filter(Boolean).map(x => { const [t, ...rest] = x.split('\n'); return { title: t.trim(), text: rest.join(' ').trim() }; });
+    store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
+  } catch (e) { clearInterval(tick); btn.disabled = false; btn.textContent = '📖 다시 시도'; log('설명 실패: ' + e.message); box.remove(); }
 }
 
 // 같은 생두는 마지막(고친/적용한) 프로파일을 기억해서 다음 배치에 바로 쓴다
@@ -279,26 +311,52 @@ function saveBeanProfile() {
 }
 
 // ---------- 배출 뒤 AI 리뷰: 다음 배치 개선점을 골라서 적용 ----------
+// 예상 vs 실제: 그 배치를 볶을 때 쓴 레시피(rec.rec)의 예상과 실제 기록을 숫자로 나란히
+function planVsActual(rec) {
+  const p = rec.rec || {}, e = p.expected || {};
+  const parse = s => { const m = String(s || '').match(/([\d.]+)@(\d+):(\d+)/); return m ? { t: +m[1], s: +m[2] * 60 + +m[3] } : null; };
+  const tp = parse(rec.tp), fc = parse(rec.fc), dr = parse(rec.drop);
+  const diff = (a, b) => { if (a == null || b == null) return ''; const d = b - a; return d === 0 ? ' (같음)' : ` (${Math.abs(d) >= 60 ? mmss(Math.abs(d)) : Math.abs(d) + '초'} ${d < 0 ? '빠름' : '느림'})`; };
+  const rows = [];
+  if (e.tpSec || tp) rows.push(['TP', e.tpSec ? `${mmss(e.tpSec)}${e.tpTemp ? ' / ' + e.tpTemp + '°' : ''}` : '-', tp ? `${mmss(tp.s)} / ${tp.t}°` : '-', diff(e.tpSec, tp?.s)]);
+  if (e.fcSec || fc) rows.push(['1차 크랙', e.fcSec ? `${mmss(e.fcSec)}${e.fcTemp ? ' / ' + e.fcTemp + '°' : ''}` : '-', fc ? `${mmss(fc.s)} / ${fc.t}°` : '-', diff(e.fcSec, fc?.s)]);
+  if (e.dropSec || dr) rows.push(['배출', e.dropSec ? `${mmss(e.dropSec)} / ${p.drop ?? '-'}°` : '-', dr ? `${mmss(dr.s)} / ${dr.t}°` : '-', diff(e.dropSec, dr?.s)]);
+  if (fc && dr) {
+    const dd = p.dtSec ? (dr.s - fc.s) - p.dtSec : null;
+    rows.push(['DT', p.dtSec ? p.dtSec + '초' : '-', (dr.s - fc.s) + '초', dd == null ? '' : dd === 0 ? ' (같음)' : ` (${Math.abs(dd)}초 ${dd < 0 ? '짧음' : '김'})`]);
+    rows.push(['상승폭', p.rise != null ? '+' + p.rise + '°' : '-', '+' + Math.round(dr.t - fc.t) + '°', p.rise != null ? (Math.round(dr.t - fc.t) === p.rise ? ' (같음)' : ` (${Math.round(dr.t - fc.t) - p.rise > 0 ? '+' : ''}${Math.round(dr.t - fc.t) - p.rise}°)`) : '']);
+  }
+  rows.push(['투입', p.charge != null ? p.charge + '°' : '-', (rec.charge ?? '-') + '°', '']);
+  return rows;
+}
+
 async function review(rec) {
   const box = $('review'); box.innerHTML = '<div class="note">AI가 이번 배치를 보고 다음 배치 개선점을 정리하는 중...</div>';
+  const pva = planVsActual(rec);
+  const pvaText = pva.map(r => `${r[0]}: 예상 ${r[1]} → 실제 ${r[2]}${r[3]}`).join('\n');
   try {
     const r = await gemini([{ role: 'user', parts: [{ text: `방금 이 생두를 볶았다. ${beanText()}
-이번에 쓴 설정: ${JSON.stringify({ charge: lastRec?.charge, startBurner: lastRec?.startBurner, steps: lastRec?.steps, drop: lastRec?.drop, rise: lastRec?.rise, dtSec: lastRec?.dtSec, expected: lastRec?.expected })}
+이번에 쓴 설정: ${JSON.stringify(rec.rec || { charge: lastRec?.charge, startBurner: lastRec?.startBurner, steps: lastRec?.steps, drop: lastRec?.drop, rise: lastRec?.rise, dtSec: lastRec?.dtSec, expected: lastRec?.expected })}
+예상 vs 실제:
+${pvaText}
 실제 결과: 투입 ${rec.charge}°C, 1차 크랙 ${rec.fc || '-'}, 배출 ${rec.drop}, DTR ${rec.dtr}%, 댐퍼 기록 ${JSON.stringify(rec.damperLog || [])}
 곡선 요약[투입 뒤 초, BT, ET, 버너%, 댐퍼(값/10 = 칸)]: ${JSON.stringify(rec.curve.filter(c => c[0] >= -10).filter((_, i) => i % 2 === 0))}
 ${$v('cupNote') ? '사용자 맛 평가: ' + $v('cupNote') : '아직 맛 평가 없음'}
-결과를 추천과 비교하고, 다음 배치에서 바꿀 것을 1~3개 골라라. 한 번에 하나씩 바꾸는 원칙을 지키되, 서로 다른 선택지로 줘라(사용자가 하나를 고른다).
-JSON으로만: {"good":["잘된 점 1~2개"],"bad":["아쉬운 점 1~2개"],"changes":[{"label":"버튼에 쓸 짧은 문장","why":"이유 한 줄","patch":{"바꿀 키만":"값"}}]}
+결과를 추천과 비교하고, 예상과 어긋난 곳이 있으면 왜 그랬는지(기계 반응, 예열 상태, 생두 특성, 날씨, 사람이 누른 시점 등) 곡선 근거를 들어 설명해라. 다음 배치에서 바꿀 것을 1~3개 골라라. 한 번에 하나씩 바꾸는 원칙을 지키되, 서로 다른 선택지로 줘라(사용자가 하나를 고른다).
+JSON으로만: {"deviation":["예상과 달랐던 점과 이유 1~3개 (같았으면 '예상대로 진행'이라고)"],"good":["잘된 점 1~2개"],"bad":["아쉬운 점 1~2개"],"changes":[{"label":"버튼에 쓸 짧은 문장","why":"이유 한 줄","patch":{"바꿀 키만":"값"}}]}
 patch에 쓸 수 있는 키: charge, startBurner, steps(전체 배열 [{bt,burner}]), drop, rise, dtSec. 숫자로.` }] }], { json: true, system: SYSTEM });
     const esc = t => String(t ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const li = arr => '<ul>' + (arr || []).map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
     box.innerHTML = `<div class="recsec"><div class="row"><div class="rech" style="flex:1">이번 배치 리뷰</div><button id="readReview">🔊 읽어주기</button></div>
+      <div><b>예상 vs 실제</b>
+        <table class="logtbl" style="margin-top:4px"><tr><th></th><th>예상</th><th>실제</th><th></th></tr>${pva.map(x => `<tr><td>${esc(x[0])}</td><td>${esc(x[1])}</td><td>${esc(x[2])}</td><td class="cup">${esc(x[3].replace(/^ \(|\)$/g, ''))}</td></tr>`).join('')}</table></div>
+      ${r.deviation?.length ? `<div><b>왜 달랐나</b>${li(r.deviation)}</div>` : ''}
       <div><b>잘된 점</b>${li(r.good)}</div>
       <div><b>아쉬운 점</b>${li(r.bad)}</div></div>
       <div class="recsec"><div class="rech">다음 배치에 반영할 것</div>
       <div class="note">하나만 고르는 걸 추천해요. 잘못 눌렀으면 다시 누르면 취소돼요.</div>
       ${(r.changes || []).map((c, i) => `<div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;padding:6px 0;border-top:1px solid var(--line)"><button data-apply="${i}">적용</button><div><div>${esc(c.label)}</div><div class="note">${esc(c.why)}</div></div></div>`).join('')}</div>`;
-    $('readReview').onclick = () => { ALARM.unlock(); ALARM.stopSpeaking?.(); ALARM.speak(['잘된 점. ' + (r.good || []).join('. '), '아쉬운 점. ' + (r.bad || []).join('. '), '다음 배치 선택지. ' + (r.changes || []).map((c, i) => (i + 1) + '번, ' + c.label).join('. ')].join(' ')); };
+    $('readReview').onclick = () => { ALARM.unlock(); ALARM.stopSpeaking?.(); ALARM.speak([(r.deviation || []).length ? '예상과 달랐던 점. ' + r.deviation.join('. ') : '', '잘된 점. ' + (r.good || []).join('. '), '아쉬운 점. ' + (r.bad || []).join('. '), '다음 배치 선택지. ' + (r.changes || []).map((c, i) => (i + 1) + '번, ' + c.label).join('. ')].join(' ')); };
     // 적용 ↔ 취소: 다시 누르면 그 변경이 바꾼 값만 원래대로
     box.querySelectorAll('[data-apply]').forEach(b => {
       let before = null;
@@ -446,7 +504,10 @@ window.onMark = async name => {
     const rec = {
       source: 'web', ts: Date.now(), date: new Date().toISOString().slice(0, 16).replace('T', ' '), bean: readBean(),
       charge: events['투입']?.bt, fc: fc ? `${fc.bt}@${mmss(fc.t - chargeAt)}` : null, drop: `${d.bt}@${mmss(d.t - chargeAt)}`,
-      dtr: fc ? +((d.t - fc.t) / (d.t - chargeAt) * 100).toFixed(1) : null, rec: lastRec && { charge: lastRec.charge, steps: lastRec.steps, drop: lastRec.drop },
+      dtr: fc ? +((d.t - fc.t) / (d.t - chargeAt) * 100).toFixed(1) : null,
+      // 그때 쓴 레시피(예상 포함)를 같이 남겨서, 나중에 레시피가 바뀌어도 "예상 vs 실제"를 비교할 수 있게
+      rec: lastRec && JSON.parse(JSON.stringify({ charge: lastRec.charge, startBurner: lastRec.startBurner, steps: lastRec.steps, drop: lastRec.drop, rise: lastRec.rise, dtSec: lastRec.dtSec, expected: lastRec.expected })),
+      tp: events.TP ? `${events.TP.bt}@${mmss(events.TP.t - chargeAt)}` : null,
       curve: samples.filter((_, i) => i % 5 === 0).map(s => [Math.round(s.t - chargeAt), s.bt, s.et, s.burner, s.damper]), damperLog: damperLog.map(d => [Math.round(d.t - chargeAt), d.v]),
     };
     const all = store.get('myRoasts', []); all.push(rec); store.set('myRoasts', all.slice(-100));
