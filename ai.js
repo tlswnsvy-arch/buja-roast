@@ -347,9 +347,13 @@ async function ask(q) {
 // ---------- 로스팅 중 안내 (로컬 규칙 + 중요한 순간에만 AI) ----------
 let saidStep = -1, lastCoach = 0;
 let lastSpoken = '', lastSpokenAt = 0;
-function coach(text) {
+// say=true일 때만 말한다. 볶는 중 계속 바뀌는 안내(DT 진행, RoR 경고 등)는 화면에만 (2번째 배치: "혼자 중얼중얼")
+function coach(text, say = false) {
   const c = $('coach'); c.style.display = 'block'; c.textContent = text;
-  if (!$('voiceOn')?.checked || !window.ALARM) return;
+  // 중요한 안내(say)는 '중요한 것만'에서도, 나머지 화면 안내는 '전부'일 때만 말한다
+  if (!window.ALARM || !$('voiceOn')?.checked) return;
+  const lv = ALARM.level?.() || 'key';
+  if (lv === 'off' || (!say && lv !== 'all')) return;
   const line = text.split('\n')[0];
   if (line === lastSpoken && Date.now() - lastSpokenAt < 30000) return;
   lastSpoken = line; lastSpokenAt = Date.now(); ALARM.speak(line.replace(/°C?/g, '도').replace(/%/g, '퍼센트'));
@@ -386,12 +390,11 @@ window.onSample = st => {
 };
 
 window.onMark = async name => {
-  if (name === '투입') { saidStep = -1; coach('투입! TP는 보통 55초쯤이에요.' + (lastRec ? ` 목표 곡선(점선)을 따라가 보세요.` : '')); }
+  if (name === '투입') { saidStep = -1; coach('투입! TP는 보통 55초쯤이에요.' + (lastRec ? ` 목표 곡선(점선)을 따라가 보세요.` : ''), true); }
   if (name === '1차 크랙') {
     const fc = events['1차 크랙'], el = fc.t - chargeAt;
     const rise = lastRec?.rise ?? 8, dt = lastRec?.dtSec ?? 60;
-    coach(`1차 크랙 ${mmss(el)}, ${fc.bt}°C. 목표: ${dt}초 동안 +${rise}도 → ${fc.bt + rise}°C에서 ${mmss(el + dt)}쯤 배출` +
-      (lastRec?.drop && Math.abs(lastRec.drop - (fc.bt + rise)) >= 2 ? `\n부자 앱 자동 배출은 ${lastRec.drop}°C로 돼 있어요. 차이가 크면 앱에서 직접 배출하세요` : ''));
+    coach(`1차 크랙 ${mmss(el)}, ${fc.bt}°C. 목표: ${dt}초 동안 +${rise}도 → ${fc.bt + rise}°C에서 ${mmss(el + dt)}쯤 배출`, true);
   }
   if (name === '배출') {
     const fc = events['1차 크랙'], d = events['배출'];

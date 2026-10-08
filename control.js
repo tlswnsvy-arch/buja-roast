@@ -5,7 +5,7 @@
 window.CONTROL = (() => {
   const LIMIT_BT = 230, LIMIT_ET = 260;       // 넘으면 버너 0
   const STALE_MS = 5000;                      // 상태가 이만큼 끊기면 경고 + 버너 0 시도
-  let enabled = false, last = null, lastAt = 0, wanted = null, stopping = false;
+  let pendingStop = null, enabled = false, last = null, lastAt = 0, wanted = null, stopping = false;
 
   const frame = {
     burner: v => [0x02, 0x03, 0x44, 0x48, v, 0x03],
@@ -39,7 +39,8 @@ window.CONTROL = (() => {
 
   async function stopAll(reason) {
     if (window.AUTO) AUTO.cancel(reason);     // 자동 실행 중이면 먼저 멈춘다
-    if (stopping || !chr) return;
+    if (!chr) { pendingStop = reason || '정지'; return; }   // 연결이 없으면 다시 연결되자마자 보낸다
+    if (stopping) return;
     stopping = true;
     const was = enabled; enabled = true;     // 정지는 제어 모드가 꺼져 있어도 보낸다
     try {
@@ -105,5 +106,10 @@ window.CONTROL = (() => {
   document.querySelectorAll('[data-fan]').forEach(b => twoTap(b, () => cmd('fan', +b.dataset.fan)));
   document.querySelectorAll('[data-drop]').forEach(b => twoTap(b, () => cmd('drop', +b.dataset.drop)));
 
-  return { allows, onStatus, stopAll, cmd, buzz, get enabled() { return enabled; }, get last() { return last; } };
+  async function onReconnect() {
+    if (pendingStop) { const r = pendingStop; pendingStop = null; await stopAll('다시 연결: ' + r); }
+    else if (last?.burner > 0 && window.AUTO && !AUTO.on) await stopAll('다시 연결: 끊긴 동안 버너가 켜져 있었음');
+  }
+
+  return { allows, onStatus, stopAll, cmd, buzz, onReconnect, get enabled() { return enabled; }, get last() { return last; } };
 })();

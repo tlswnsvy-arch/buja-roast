@@ -54,6 +54,7 @@
       <button id="eDrop" disabled>배출</button>
     </div>
     <div id="events" class="note"></div>
+    <button id="nextBatch" class="go" hidden style="font-size:18px;padding:14px">🔁 다음 배치 (같은 레시피로 바로 예열)</button>
     <div class="row" id="damperRow">
       <span class="note">댐퍼 칸 (돌린 뒤 눌러서 기록 · 10칸 = 풀개방)</span>
       <button data-d="100">10</button><button data-d="90">9</button><button data-d="80">8</button><button data-d="70">7</button><button data-d="60">6</button><button data-d="50">5</button><button data-d="40">4</button><button data-d="30">3</button><button data-d="20">2</button><button data-d="10">1</button>
@@ -288,7 +289,10 @@ function autoDetect(st) {
     if ($('phase').textContent !== ph) $('phase').textContent = ph;
   }
   const drop6 = back.bt - s.bt;
-  if (chargeAt == null && back.bt >= 120 && drop6 >= 15) {
+  // 투입 감지: 생두가 들어가면 BT가 몇 초 만에 수십 도 떨어진다. 3초에 10도 이상이면 투입으로 본다
+  // (2번째 배치: 6초에 15도 기준이라 그래프 전환이 늦었음. 예열 중 버너를 줄여도 빈 드럼은 이렇게 빨리 안 식는다)
+  const back3 = samples.find(x => x.t >= s.t - 3), drop3 = back3 ? back3.bt - s.bt : 0;
+  if (chargeAt == null && ((back.bt >= 120 && drop6 >= 15) || (back3 && back3.bt >= 120 && drop3 >= 10))) {
     // 급락 직전 최고점을 투입 시점으로
     const peak = samples.filter(x => x.t >= s.t - 8).reduce((a, b) => b.bt >= a.bt ? b : a);
     mark('투입', peak); log('투입 자동 감지'); return;
@@ -420,25 +424,54 @@ async function connect() {
   try {
     const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [SVC] }], optionalServices: [SVC] })
       .catch(() => navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [SVC] }));
-    $('state').textContent = dev.name + ' 연결 중...';
-    dev.addEventListener('gattserverdisconnected', () => { $('state').textContent = '연결 끊김'; clearInterval(pollTimer); $('connect').disabled = false; });
-    const srv = await dev.gatt.connect();
-    chr = await (await srv.getPrimaryService(SVC)).getCharacteristic(CHR);
-    chr.addEventListener('characteristicvaluechanged', onData);
-    await chr.startNotifications();
-    await send(SAFE.hello);
-    // 이전 요청이 아직 안 끝났으면 이번 요청은 건너뛴다 (GATT operation already in progress 방지)
-    let busy = false;
-    pollTimer = setInterval(async () => {
-      if (busy) return;
-      busy = true;
-      try { await send(SAFE.status); } catch (e) { log('요청 실패 ' + e.message); } finally { busy = false; }
-    }, 1000);
-    $('state').textContent = dev.name + ' 연결됨';
-    $('connect').disabled = true;
-    ['eCharge', 'e1C', 'e2C', 'eDrop'].forEach(i => $(i).disabled = false);
-    log('연결됨: ' + dev.name);
+    roasterDev = dev; userDisconnect = false;
+    dev.addEventListener('gattserverdisconnected', onLost);
+    await link(dev);
   } catch (e) { $('state').textContent = '연결 실패'; log('연결 실패: ' + e.message); }
+}
+
+// 실제로 연결하고 1초마다 상태를 묻는다 (처음 연결·다시 연결 공통)
+async function link(dev) {
+  $('state').textContent = dev.name + ' 연결 중...';
+  const srv = await dev.gatt.connect();
+  chr = await (await srv.getPrimaryService(SVC)).getCharacteristic(CHR);
+  chr.addEventListener('characteristicvaluechanged', onData);
+  await chr.startNotifications();
+  await send(SAFE.hello);
+  // 이전 요청이 아직 안 끝났으면 이번 요청은 건너뛴다 (GATT operation already in progress 방지)
+  let busy = false;
+  clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    if (busy) return;
+    busy = true;
+    try { await send(SAFE.status); } catch (e) { log('요청 실패 ' + e.message); } finally { busy = false; }
+  }, 1000);
+  $('state').textContent = dev.name + ' 연결됨';
+  $('connect').textContent = '연결 끊기';
+  $('connect').disabled = false;
+  ['eCharge', 'e1C', 'e2C', 'eDrop'].forEach(i => $(i).disabled = false);
+  log('연결됨: ' + dev.name);
+}
+
+// 연결이 끊기면: 알람 → 3초마다 다시 연결(2분) → 다시 붙으면 못 보낸 "버너 0"부터 보내고, 자동은 사람이 이어가기
+// (2번째 배치: 태블릿을 들고 베란다를 벗어나 40초 끊겼고, 그동안 로스터는 마지막 버너 100%로 계속 돌았음)
+let userDisconnect = false, reconnectTimer = null;
+function onLost() {
+  clearInterval(pollTimer); chr = null;
+  $('connect').textContent = '로스터 연결';
+  if (userDisconnect || !roasterDev) { $('state').textContent = '연결 끊김'; roasterDev = null; return; }
+  $('state').textContent = '연결 끊김 · 다시 연결 중...';
+  log('블루투스 끊김');
+  const burning = (CONTROL.last?.burner || 0) > 0;
+  if (window.AUTO) AUTO.cancel('화면 벗어남(블루투스 끊김)');
+  window.ALARM?.ring(burning ? '로스터 연결이 끊겼어요. 버너가 켜져 있어요. 로스터 가까이 가 주세요' : '로스터 연결이 끊겼어요. 로스터 가까이 가 주세요', 4, false);
+  const dev = roasterDev, until = Date.now() + 120000;
+  clearInterval(reconnectTimer);
+  reconnectTimer = setInterval(async () => {
+    if (chr) return clearInterval(reconnectTimer);
+    if (Date.now() > until) { clearInterval(reconnectTimer); $('state').textContent = '연결 끊김 · 로스터 연결을 다시 눌러 주세요'; window.ALARM?.ring('다시 연결하지 못했어요. 로스터 전원을 확인하세요', 4, false); return; }
+    try { await link(dev); clearInterval(reconnectTimer); await CONTROL.onReconnect(); window.AUTO?.offerResume(); } catch (e) { log('다시 연결 실패: ' + e.message); }
+  }, 3000);
 }
 
 function saveCsv() {
@@ -450,7 +483,30 @@ function saveCsv() {
   a.click();
 }
 
-$('connect').onclick = connect;
+// 연결 끊기: 버너가 켜져 있으면 먼저 끄고 끊는다 (끊긴 뒤엔 버너를 끌 방법이 없어서)
+let roasterDev = null;
+async function disconnect() {
+  if (window.AUTO) AUTO.cancel('연결 끊기');
+  if (CONTROL.last?.burner > 0) { await CONTROL.stopAll('연결 끊기 전'); await new Promise(r => setTimeout(r, 800)); }
+  userDisconnect = true; clearInterval(reconnectTimer); clearInterval(pollTimer);
+  try { roasterDev?.gatt.disconnect(); } catch {}
+  log('연결 끊음');
+}
+$('connect').onclick = () => (roasterDev && chr ? disconnect() : connect());
+
+// 연속 배치: 배출이 끝난 뒤 그래프·이벤트를 비우고 같은 레시피로 다음 배치를 준비한다 (연결은 그대로)
+function newBatch() {
+  if (chargeAt != null && !events['배출']) { log('로스팅 중에는 새 배치를 시작할 수 없어요'); return false; }
+  samples.length = 0; damperLog.length = 0;
+  for (const k of Object.keys(events)) delete events[k];
+  chargeAt = null; t0 = null;
+  $('events').textContent = ''; $('phase').textContent = '투입 전'; $('coach').style.display = 'none';
+  $('timer').querySelector('.v').textContent = '0:00';
+  $('nextBatch').hidden = true;
+  draw(); log('다음 배치 준비');
+  return true;
+}
+window.newBatch = newBatch;
 $('eCharge').onclick = () => mark('투입');
 $('e1C').onclick = () => mark('1차 크랙');
 $('e2C').onclick = () => mark('2차 크랙');
@@ -476,9 +532,9 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=29"></script>
-<script src="control.js?v=29"></script>
-<script src="auto.js?v=30"></script>
-<script src="ui.js?v=27"></script>
+<script src="ai.js?v=32"></script>
+<script src="control.js?v=31"></script>
+<script src="auto.js?v=33"></script>
+<script src="ui.js?v=32"></script>
 </body>
 </html>

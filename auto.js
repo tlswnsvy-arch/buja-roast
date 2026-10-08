@@ -25,10 +25,11 @@ window.ALARM = (() => {
   let queue = Promise.resolve(), current = null, gen = 0;   // gen: 멈추면 올라가서, 그 전에 줄 서 있던 소리는 버린다
   const pref = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
   async function aiAudio(text) {
-    if (cache.has(text)) return cache.get(text);
+    // 기억은 목소리별로 (목소리를 바꿔도 예전 목소리 소리가 나오던 문제)
+    const voice = pref('aiVoice', 'Kore'), ck = voice + '|' + text;
+    if (cache.has(ck)) return cache.get(ck);
     let key = ''; try { key = JSON.parse(localStorage.getItem('gemKey') || '""'); } catch {}
     if (!key) throw new Error('키 없음');
-    const voice = pref('aiVoice', 'Kore');
     for (const m of TTS_MODELS) {
       try {
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
@@ -49,7 +50,7 @@ window.ALARM = (() => {
           const n = bytes.length >> 1, dv = new DataView(bytes.buffer); buf = ctx.createBuffer(1, n, 24000);
           const ch = buf.getChannelData(0); for (let i = 0; i < n; i++) ch[i] = dv.getInt16(2 * i, true) / 32768;
         }
-        if (text.length < 80) cache.set(text, buf);
+        if (text.length < 80) cache.set(ck, buf);
         return buf;
       } catch {}
     }
@@ -68,7 +69,8 @@ window.ALARM = (() => {
     return out;
   }
   // 음성 끔(🔇)이면 말은 안 하고, ring()의 삑 소리·진동만 남는다
-  const muted = () => pref('mute', '0') === '1';
+  const level = () => pref('voiceLevel', pref('mute', '0') === '1' ? 'off' : 'key');
+  const muted = () => level() === 'off';
   function speak(text) {
     if (muted()) return;
     if (pref('voiceMode', 'ai') === 'ai') {
@@ -103,8 +105,9 @@ window.ALARM = (() => {
     } catch {}
   }
   try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); } catch {}
-  const ring = (text, times = 3) => { beep(times); try { window.CONTROL?.buzz(Math.min(3, times)); } catch {} setTimeout(() => speak(text), times * 350 + 100); };
-  return { unlock, ring, beep, speak, stopSpeaking };
+  // buzz=false면 로스터 부저는 빼고 태블릿 소리만 (1차 크랙 임박처럼 귀를 기울여야 할 때 부저가 방해돼서)
+  const ring = (text, times = 3, buzz = true) => { beep(times); if (buzz) try { window.CONTROL?.buzz(Math.min(3, times)); } catch {} setTimeout(() => speak(text), times * 350 + 100); };
+  return { unlock, ring, beep, speak, stopSpeaking, level };
 })();
 
 window.AUTO = (() => {
@@ -119,7 +122,7 @@ window.AUTO = (() => {
     burnerNow = v; lastSet = Date.now();
     await CONTROL.cmd('burner', v);
     say(`버너 ${v}% · ${why}`);
-    if ($('voiceOn')?.checked && phase === 'roast') ALARM.speak(`버너 ${v}퍼센트`);
+    if (phase === 'roast' && level() === 'all') ALARM.speak(`버너 ${v}퍼센트`);
   }
 
   async function begin(m, preheatTo, resuming = false) {
@@ -173,6 +176,7 @@ window.AUTO = (() => {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden || !paused) return;
     if (Date.now() - paused.at > 10 * 60000) { paused = null; return; }
+    $('resumeBtn').textContent = '화면을 벗어나서 버너를 껐어요 · 눌러서 자동 이어가기';
     $('resumeBtn').style.display = 'block';
     ALARM.ring('화면을 벗어나서 버너를 껐어요. 이어가려면 자동 이어가기를 누르세요', 2);
   });
@@ -184,6 +188,7 @@ window.AUTO = (() => {
     await CONTROL.cmd('fan', 1);
     if (!events['배출']) mark('배출');
     stopUi();
+    $('nextBatch').hidden = false;
     ALARM.ring('배출했어요');
     const coolMin = +($('coolMin')?.value || 0);
     say(`자동 배출 (${why}). 쿨링 켰어요.` + (coolMin ? ` ${coolMin}분 뒤 쿨링을 끄고 배출구를 닫아요` : ' 원두가 식으면 쿨링 끄고 배출구 닫으세요'));
@@ -250,7 +255,8 @@ window.AUTO = (() => {
       }
       if (Math.abs(gap) <= 3) {
         if (!holdSince) holdSince = now;
-        if (now - holdSince > 30000) {
+        // 목표에 닿는 순간 바로 알린다 (2번째 배치: 30초 기다리는 사이에 투입해서 알람이 안 울렸음)
+        {
           $('autoMsg').textContent = `투입 준비 완료 (BT ${st.bt}°). 레버로 생두를 넣으세요. 투입은 자동으로 알아채요`;
           if (!readyRung) { readyRung = true; lastReadyRing = now; ALARM.ring('투입 준비 완료. 생두를 넣으세요', 4); }
           // 기다리는 동안 2분 30초마다 다시 알림 (15분이 지나면 위 안전장치가 예열을 끈다)
@@ -302,7 +308,7 @@ window.AUTO = (() => {
     }
     // 1차 크랙이 곧 올 때 알림 (귀 기울이세요)
     const fcT = r.expected?.fcTemp || 186;
-    if (!fc && !fcWarned && (events.TP || el > 120) && st.bt >= fcT - 6) { fcWarned = true; ALARM.ring('곧 1차 크랙이에요. 첫 크랙 들리면 버튼을 누르세요', 2); }
+    if (!fc && !fcWarned && (events.TP || el > 120) && st.bt >= fcT - 6) { fcWarned = true; ALARM.ring('곧 1차 크랙이에요. 첫 크랙 들리면 버튼을 누르세요', 2, false); }
 
     // 자동 배출: 1차 크랙 온도 + 목표 상승폭에 닿으면 (일찍 닿아도 끌지 않음), DT가 지나면.
     // 상승폭이 4도 이내로 모자라고 RoR이 살아 있으면 DT+15초까지 기다린다 (첫 실전: +5도에서 끊김)
@@ -318,7 +324,20 @@ window.AUTO = (() => {
   }
 
   $('autoStart').addEventListener('click', start);
+  // 다음 배치: 비우고 같은 레시피로 자동 시작 (버튼을 누른 것 자체를 "지켜볼게요" 확인으로 본다)
+  $('nextBatch').addEventListener('click', () => {
+    if (!CONTROL.enabled) { $('nextBatch').hidden = true; return say('"로스터 옆에 있어요"를 체크한 뒤 다시 시작하세요'); }
+    if (!newBatch()) return;
+    $('autoAck').checked = true; start();
+  });
   $('preheatStart').addEventListener('click', preheatOnly);
   $('resumeBtn').addEventListener('click', () => { if (paused) { $('autoAck').checked = true; begin(paused.mode, paused.target, true); } });
-  return { tick, cancel, get on() { return on; } };
+  // 블루투스가 다시 연결됐을 때: 멈춘 자동을 이어갈 수 있게 버튼을 띄운다
+  function offerResume() {
+    if (!paused || Date.now() - paused.at > 10 * 60000) return;
+    $('resumeBtn').textContent = '로스터가 다시 연결됐어요 · 눌러서 자동 이어가기';
+    $('resumeBtn').style.display = 'block';
+    ALARM.ring('로스터가 다시 연결됐어요. 이어가려면 자동 이어가기를 누르세요', 2, false);
+  }
+  return { tick, cancel, offerResume, get on() { return on; } };
 })();

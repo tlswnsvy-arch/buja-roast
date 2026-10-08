@@ -71,15 +71,13 @@
     $(id).addEventListener('change', () => { try { localStorage.setItem(id, $(id).value); } catch {} });
   }
   // 맨 위 🔊/🔇: 음성 끄기 (삑 소리와 진동은 남김)
-  const showMute = () => {
-    let m = '0'; try { m = localStorage.getItem('mute') || '0'; } catch {}
-    $('muteBtn').textContent = m === '1' ? '🔇 음성 끔' : '🔊 음성';
-    $('muteBtn').style.opacity = m === '1' ? '.7' : '1';
-  };
+  // 음성 3단계: 🔉 중요한 것만(기본) → 🔊 전부 → 🔇 끔(삑 소리·진동만)
+  const LEVELS = { key: '🔉 중요한 것만', all: '🔊 전부', off: '🔇 음성 끔' }, ORDER = ['key', 'all', 'off'];
+  const showMute = () => { const lv = ALARM.level(); $('muteBtn').textContent = LEVELS[lv]; $('muteBtn').style.opacity = lv === 'off' ? '.7' : '1'; };
   $('muteBtn').onclick = () => {
-    let m = '0'; try { m = localStorage.getItem('mute') || '0'; } catch {}
-    try { localStorage.setItem('mute', m === '1' ? '0' : '1'); } catch {}
-    if (m !== '1') ALARM.stopSpeaking();
+    const next = ORDER[(ORDER.indexOf(ALARM.level()) + 1) % ORDER.length];
+    try { localStorage.setItem('voiceLevel', next); localStorage.removeItem('mute'); } catch {}
+    if (next === 'off') ALARM.stopSpeaking();
     showMute();
   };
   showMute();
