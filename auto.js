@@ -112,7 +112,7 @@ window.ALARM = (() => {
 
 window.AUTO = (() => {
   let paused = null, on = false, phase = 'off', mode = 'full', target = 0, burnerNow = null, lastSet = 0, adj = 0, lastAdjAt = 0,
-    holdSince = 0, readyRung = false, fcWarned = false, wake = null, stepIdx = 0, holdBase = 40, coolTimer = null, preStart = 0, stallSince = 0, maillardSaid = false, damperSaid = false, lastReadyRing = 0;
+    holdSince = 0, readyRung = false, fcWarned = false, wake = null, stepIdx = 0, holdBase = 40, coolTimer = null, preStart = 0, stallSince = 0, maillardSaid = false, damperSaid = false, lastReadyRing = 0, prepRung = false;
   const PREHEAT_MAX_MIN = 20;
   const say = t => { $('autoMsg').textContent = t; log('자동: ' + t); };
 
@@ -132,7 +132,7 @@ window.AUTO = (() => {
     paused = null; $('resumeBtn').style.display = 'none';
     ALARM.unlock();
     mode = m; target = preheatTo;
-    on = true; adj = 0; holdSince = 0; preStart = 0; stallSince = 0; maillardSaid = false; damperSaid = false; readyRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
+    on = true; adj = 0; holdSince = 0; preStart = 0; stallSince = 0; maillardSaid = false; damperSaid = false; readyRung = false; prepRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
     phase = chargeAt == null ? 'preheat' : 'roast';
     try { wake = await navigator.wakeLock?.request('screen'); } catch {}   // 화면이 꺼지면 안전장치가 버너를 끄므로 켜둔다
     $('autoBanner').style.display = 'block';
@@ -189,14 +189,14 @@ window.AUTO = (() => {
     if (!events['배출']) mark('배출');
     stopUi();
     $('nextBatch').hidden = false;
-    ALARM.ring('배출했어요');
+    ALARM.ring('배출했어요', 3, false);   // 로스터 부저는 예열 완료 때 한 번만 (사용자 요청)
     const coolMin = +($('coolMin')?.value || 0);
     say(`자동 배출 (${why}). 쿨링 켰어요.` + (coolMin ? ` ${coolMin}분 뒤 쿨링을 끄고 배출구를 닫아요` : ' 원두가 식으면 쿨링 끄고 배출구 닫으세요'));
     clearTimeout(coolTimer);
     if (coolMin) coolTimer = setTimeout(async () => {
       if (!CONTROL.enabled || !chr) return;
       await CONTROL.cmd('fan', 0); await CONTROL.cmd('drop', 0);
-      ALARM.ring('쿨링 끝났어요', 2);
+      ALARM.ring('쿨링 끝났어요', 2, false);
       say('쿨링 끄고 배출구 닫았어요. 로스팅 끝!');
     }, coolMin * 60000);
   }
@@ -213,7 +213,7 @@ window.AUTO = (() => {
     if (!coolSaid && hot < COOL_OFF) {
       coolSaid = true;
       $('phase').textContent = `${hot}° · 이제 기계를 꺼도 돼요`;
-      ALARM.ring(`${COOL_OFF}도 아래로 내려왔어요. 이제 기계를 꺼도 돼요. 채프통도 확인해 주세요`, 3);
+      ALARM.ring(`${COOL_OFF}도 아래로 내려왔어요. 이제 기계를 꺼도 돼요. 채프통도 확인해 주세요`, 3, false);
     }
   }
 
@@ -255,15 +255,21 @@ window.AUTO = (() => {
       }
       if (Math.abs(gap) <= 3) {
         if (!holdSince) holdSince = now;
-        // 목표에 닿는 순간 바로 알린다 (2번째 배치: 30초 기다리는 사이에 투입해서 알람이 안 울렸음)
+        // 두 단계 알림 (3번째 배치: 닿자마자 "넣으세요"가 나와 온도가 자리 잡기 전에 투입함)
+        // 1) 목표에 닿으면 "준비하세요"(태블릿만)  2) 20초 동안 ±3도로 자리 잡으면 "넣으세요"(태블릿 + 로스터 부저)
         {
-          $('autoMsg').textContent = `투입 준비 완료 (BT ${st.bt}°). 레버로 생두를 넣으세요. 투입은 자동으로 알아채요`;
-          if (!readyRung) { readyRung = true; lastReadyRing = now; ALARM.ring('투입 준비 완료. 생두를 넣으세요', 4); }
-          // 기다리는 동안 2분 30초마다 다시 알림 (15분이 지나면 위 안전장치가 예열을 끈다)
-          else if (now - lastReadyRing > 150000) {
-            lastReadyRing = now;
-            const left = Math.max(1, Math.round(15 - (now - holdSince) / 60000));
-            ALARM.ring(`투입 준비돼 있어요. ${left}분 안에 넣지 않으면 예열을 꺼요`, 2);
+          if (!prepRung) { prepRung = true; ALARM.ring('곧 투입 온도예요. 생두를 준비하세요', 2, false); }
+          if (now - holdSince < 20000) {
+            $('autoMsg').textContent = `곧 투입 온도예요 (BT ${st.bt}°). 생두를 준비하세요. 온도가 자리 잡으면 다시 알려요`;
+          } else {
+            $('autoMsg').textContent = `투입하세요 (BT ${st.bt}°). 레버로 생두를 넣으세요. 투입은 자동으로 알아채요`;
+            if (!readyRung) { readyRung = true; lastReadyRing = now; ALARM.ring('이제 생두를 넣으세요', 3); }
+            // 기다리는 동안 2분 30초마다 다시 알림 (태블릿만, 15분이 지나면 위 안전장치가 예열을 끈다)
+            else if (now - lastReadyRing > 150000) {
+              lastReadyRing = now;
+              const left = Math.max(1, Math.round(15 - (now - holdSince) / 60000));
+              ALARM.ring(`투입 준비돼 있어요. ${left}분 안에 넣지 않으면 예열을 꺼요`, 2, false);
+            }
           }
         }
       } else holdSince = 0;
@@ -301,10 +307,10 @@ window.AUTO = (() => {
       maillardSaid = true;
       const dc = r.damperChange;
       const damperMsg = dc && dc.notch && (!dc.atBt || dc.atBt <= yellowT + 5) ? ` 댐퍼를 ${dc.notch}칸으로 돌리고 화면의 ${dc.notch}을 눌러 주세요.` : '';
-      ALARM.ring('지금부터 마이야르 구간이에요.' + damperMsg, 2);
+      ALARM.ring('지금부터 마이야르 구간이에요.' + damperMsg, 2, false);
     }
     if (r.damperChange?.atBt && r.damperChange.atBt > yellowT + 5 && !damperSaid && st.bt >= r.damperChange.atBt && !fc) {
-      damperSaid = true; ALARM.ring(`댐퍼를 ${r.damperChange.notch}칸으로 돌려 주세요`, 2);
+      damperSaid = true; ALARM.ring(`댐퍼를 ${r.damperChange.notch}칸으로 돌려 주세요`, 2, false);
     }
     // 1차 크랙이 곧 올 때 알림 (귀 기울이세요)
     const fcT = r.expected?.fcTemp || 186;

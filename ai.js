@@ -457,6 +457,7 @@ function coach(text, say = false) {
   if (!window.ALARM || !$('voiceOn')?.checked) return;
   const lv = ALARM.level?.() || 'key';
   if (lv === 'off' || (!say && lv !== 'all')) return;
+  if (!say && events['배출']) return;   // 배출 뒤 혼자 말하지 않게 (3번째 배치)
   const line = text.split('\n')[0];
   if (line === lastSpoken && Date.now() - lastSpokenAt < 30000) return;
   lastSpoken = line; lastSpokenAt = Date.now(); ALARM.speak(line.replace(/°C?/g, '도').replace(/%/g, '퍼센트'));

@@ -148,6 +148,16 @@
       <div class="row"><h2 style="flex:1">배치 기록</h2><button id="save">지금 곡선 CSV 저장</button></div>
       <div id="logTable" class="note">아직 이 화면으로 볶은 기록이 없어요.</div>
     </section>
+    <section class="card" id="replayCard" hidden>
+      <div class="row"><h2 style="flex:1" id="replayTitle">재생</h2><button id="replayClose">닫기</button></div>
+      <canvas id="replayChart" style="height:min(50vh,520px)"></canvas>
+      <div class="row">
+        <button id="replayPlay" class="go">▶ 재생</button>
+        <select id="replaySpeed" style="width:auto"><option value="10">10배 빠르게</option><option value="30" selected>30배 빠르게</option><option value="60">60배 빠르게</option></select>
+        <input id="replayTime" type="range" min="-30" max="600" step="1" value="-30" style="flex:1;min-width:160px">
+        <button id="replayVideo">🎬 동영상 저장</button>
+      </div>
+    </section>
   </section>
 
   <!-- AI 질문 -->
@@ -532,9 +542,10 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=40"></script>
+<script src="ai.js?v=41"></script>
 <script src="control.js?v=31"></script>
-<script src="auto.js?v=34"></script>
-<script src="ui.js?v=32"></script>
+<script src="auto.js?v=42"></script>
+<script src="replay.js?v=41"></script>
+<script src="ui.js?v=41"></script>
 </body>
 </html>

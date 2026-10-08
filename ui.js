@@ -41,9 +41,10 @@
       return `<tr><td>${when}</td><td>${esc(r.bean?.name || '-')}<div class="note">${esc(r.bean?.amt || '')}${r.bean?.amt ? 'g' : ''}</div></td>
         <td>${esc(r.charge ?? '-')}°</td><td>${fc ? `${fc.t}° ${r.fc.split('@')[1]}` : '-'}</td><td>${dr ? `${dr.t}° ${r.drop.split('@')[1]}` : '-'}</td>
         <td>${dt != null ? dt + '초' : '-'}<div class="note">${rise != null ? '+' + rise + '°' : ''}</div></td><td>${r.dtr ?? '-'}%</td>
-        <td class="cup">${esc(r.cupping || '')}<div><a href="#" data-cup="${i}" style="color:var(--et)">${r.cupping ? '고치기' : '맛 적기'}</a></div></td></tr>`;
+        <td class="cup">${esc(r.cupping || '')}<div><a href="#" data-cup="${i}" style="color:var(--et)">${r.cupping ? '고치기' : '맛 적기'}</a></div>${r.curve?.length ? `<div><a href="#" data-replay="${i}" style="color:var(--gold)">▶ 재생</a></div>` : ''}</td></tr>`;
     }).reverse().join('');
     $('logTable').innerHTML = `<table class="logtbl"><tr><th>날짜</th><th>생두</th><th>투입</th><th>1차 크랙</th><th>배출</th><th>DT·상승</th><th>DTR</th><th>맛 평가</th></tr>${rows}</table>`;
+    $('logTable').querySelectorAll('[data-replay]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); REPLAY.open(all[+a.dataset.replay]); }));
     $('logTable').querySelectorAll('[data-cup]').forEach(a => a.addEventListener('click', e => {
       e.preventDefault();
       const i = +a.dataset.cup, v = prompt('맛 평가', all[i].cupping || '');
