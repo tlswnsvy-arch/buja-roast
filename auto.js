@@ -18,9 +18,64 @@ window.ALARM = (() => {
     } catch {}
     try { navigator.vibrate?.([300, 150, 300, 150, 300]); } catch {}
   }
-  function speak(text) { try { const u = new SpeechSynthesisUtterance(text); u.lang = 'ko-KR'; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch {} }
+  // 목소리: 'ai' = Gemini 음성(하집사 AI 목소리와 같은 방식, 1~3초 걸림), 'device' = 기기 기본 음성(빠름)
+  // AI 목소리는 순서대로 읽고(겹치지 않게), 같은 문장은 기억해 두었다가 바로 다시 쓴다. 안 되면 기기 음성으로
+  const TTS_MODELS = ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts', 'gemini-2.5-flash-preview-tts'];
+  const cache = new Map();
+  let queue = Promise.resolve(), current = null;
+  const pref = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+  async function aiAudio(text) {
+    if (cache.has(text)) return cache.get(text);
+    let key = ''; try { key = JSON.parse(localStorage.getItem('gemKey') || '""'); } catch {}
+    if (!key) throw new Error('키 없음');
+    const voice = pref('aiVoice', 'Kore');
+    for (const m of TTS_MODELS) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify({ contents: [{ parts: [{ text }] }], generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } }),
+        });
+        if (!r.ok) continue;
+        const d = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.inlineData;
+        if (!d?.data) continue;
+        // 24kHz 16비트 PCM → 오디오 버퍼
+        const raw = atob(d.data), n = raw.length >> 1, buf = ctx.createBuffer(1, n, 24000), ch = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) { let v = raw.charCodeAt(2 * i) | (raw.charCodeAt(2 * i + 1) << 8); if (v >= 32768) v -= 65536; ch[i] = v / 32768; }
+        if (text.length < 80) cache.set(text, buf);
+        return buf;
+      } catch {}
+    }
+    throw new Error('AI 목소리 실패');
+  }
+  function play(buf) {
+    return new Promise(res => { const s = ctx.createBufferSource(); s.buffer = buf; s.connect(ctx.destination); s.onended = res; current = s; s.start(); });
+  }
+  function speak(text) {
+    if (pref('voiceMode', 'ai') === 'ai') {
+      unlock();
+      queue = queue.then(() => aiAudio(text).then(play)).catch(() => deviceSpeak(text));
+      return;
+    }
+    deviceSpeak(text);
+  }
+  function stopSpeaking() { try { current?.stop(); } catch {} queue = Promise.resolve(); try { speechSynthesis.cancel(); } catch {} }
+  // 한국어 목소리를 골라서 읽는다. 태블릿 기본 엔진(삼성 TTS)에 한국어가 없으면 조용하므로 알려준다
+  function deviceSpeak(text) {
+    try {
+      const ko = speechSynthesis.getVoices().find(v => /^ko/i.test(v.lang));
+      if (!ko) {
+        const c = $('coach'); c.style.display = 'block';
+        c.textContent = '태블릿에 한국어 음성이 없어서 읽어줄 수 없어요. 설정 → 일반 → 텍스트 음성 변환 → 기본 엔진을 Google로 바꿔 주세요';
+        return;
+      }
+      const u = new SpeechSynthesisUtterance(text); u.voice = ko; u.lang = ko.lang;
+      if (speechSynthesis.speaking) speechSynthesis.cancel();
+      setTimeout(() => speechSynthesis.speak(u), 60);   // 안드로이드 크롬은 cancel 직후 speak가 씹히는 경우가 있다
+    } catch {}
+  }
+  try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); } catch {}
   const ring = (text, times = 3) => { beep(times); setTimeout(() => speak(text), times * 350 + 100); };
-  return { unlock, ring, beep, speak };
+  return { unlock, ring, beep, speak, stopSpeaking };
 })();
 
 window.AUTO = (() => {

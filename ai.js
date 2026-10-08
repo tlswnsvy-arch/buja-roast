@@ -199,7 +199,7 @@ function renderRec() {
     ${r.nextTry ? `<div class="recsec"><div class="rech">다음 배치 실험</div><div>${esc(r.nextTry)}</div></div>` : ''}`;
   $('undoRec').onclick = undoRec;
   $('readRec').onclick = () => {
-    ALARM.unlock();
+    ALARM.unlock(); ALARM.stopSpeaking?.();
     const steps = (r.steps || []).map(s => `원두 ${s.bt}도에서 버너 ${s.burner}퍼센트`).join(', ');
     const parts = [r.summary, r.level && `배전도는 ${r.level}.`,
       `투입 ${r.charge}도, 시작 버너 ${r.startBurner ?? 100}퍼센트. ${steps}. 1차 크랙 뒤 ${r.rise ?? 8}도 올리고, 디벨롭 ${r.dtSec ?? 60}초.`,
@@ -269,7 +269,7 @@ patch에 쓸 수 있는 키: charge, startBurner, steps(전체 배열 [{bt,burne
       <div class="recsec"><div class="rech">다음 배치에 반영할 것</div>
       <div class="note">하나만 고르는 걸 추천해요. 잘못 눌렀으면 다시 누르면 취소돼요.</div>
       ${(r.changes || []).map((c, i) => `<div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;padding:6px 0;border-top:1px solid var(--line)"><button data-apply="${i}">적용</button><div><div>${esc(c.label)}</div><div class="note">${esc(c.why)}</div></div></div>`).join('')}</div>`;
-    $('readReview').onclick = () => { ALARM.unlock(); ALARM.speak(['잘된 점. ' + (r.good || []).join('. '), '아쉬운 점. ' + (r.bad || []).join('. '), '다음 배치 선택지. ' + (r.changes || []).map((c, i) => (i + 1) + '번, ' + c.label).join('. ')].join(' ')); };
+    $('readReview').onclick = () => { ALARM.unlock(); ALARM.stopSpeaking?.(); ALARM.speak(['잘된 점. ' + (r.good || []).join('. '), '아쉬운 점. ' + (r.bad || []).join('. '), '다음 배치 선택지. ' + (r.changes || []).map((c, i) => (i + 1) + '번, ' + c.label).join('. ')].join(' ')); };
     // 적용 ↔ 취소: 다시 누르면 그 변경이 바꾼 값만 원래대로
     box.querySelectorAll('[data-apply]').forEach(b => {
       let before = null;

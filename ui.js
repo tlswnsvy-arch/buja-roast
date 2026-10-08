@@ -65,6 +65,13 @@
   const origMark = window.onMark;
   window.onMark = async name => { await origMark?.(name); if (name === '배출') renderLog(); };
 
+  // 목소리 설정 (이 기기에 저장)
+  for (const id of ['voiceMode', 'aiVoice']) {
+    try { const v = localStorage.getItem(id); if (v) $(id).value = v; } catch {}
+    $(id).addEventListener('change', () => { try { localStorage.setItem(id, $(id).value); } catch {} });
+  }
+  $('voiceTest').onclick = () => { ALARM.unlock(); ALARM.stopSpeaking(); ALARM.speak('투입 준비 완료. 생두를 넣으세요.'); };
+
   recipeLine();
   let first = 'roast'; try { first = localStorage.getItem('tab') || 'roast'; } catch {}
   show(first);
