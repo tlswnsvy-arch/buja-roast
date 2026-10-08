@@ -49,7 +49,7 @@
 </head>
 <body>
 <header>
-  <h1>부자 AI 로스팅 <span class="note">(읽기 전용)</span></h1>
+  <h1>부자 AI 로스팅 <span class="note" id="modeTag">(읽기 전용)</span></h1>
   <span id="state">연결 안 됨</span>
   <button class="main" id="connect">로스터 연결</button>
 </header>
@@ -66,6 +66,27 @@
     <span class="chip" id="cDrop">배출구</span>
     <span class="chip" id="cTarget">예열 목표 -</span>
   </div>
+  <section class="card" id="ctlCard">
+    <div class="row">
+      <h2 style="flex:1">로스터 직접 제어 <span class="note">(시험 단계)</span></h2>
+      <label style="display:flex;align-items:center;gap:8px;color:var(--text)"><input type="checkbox" id="ctlOn" style="width:22px;height:22px"> 로스터 옆에 있어요 (제어 켜기)</label>
+    </div>
+    <div id="ctlBody" style="display:none;gap:10px">
+      <div class="row">
+        <button id="stopAll" style="background:#c62828;border-color:#c62828;font-size:18px;font-weight:700;padding:14px 22px">전체 정지</button>
+        <span class="note">한 번 누르면 바로 버너 0 + 정지. 다른 버튼은 두 번 눌러야 보내져요.</span>
+      </div>
+      <div class="row">
+        <span class="note" style="width:60px">버너</span>
+        <button data-burner="0">0%</button><button data-burner="30">30%</button><button data-burner="50">50%</button><button data-burner="60">60%</button><button data-burner="80">80%</button><button data-burner="100">100%</button>
+      </div>
+      <div class="row">
+        <span class="note" style="width:60px">쿨링</span><button data-fan="1">켜기</button><button data-fan="0">끄기</button>
+        <span class="note" style="width:60px;margin-left:12px">배출구</span><button data-drop="1">열기</button><button data-drop="0">닫기</button>
+      </div>
+      <div id="ctlMsg" class="note"></div>
+    </div>
+  </section>
   <div class="row" id="damperRow">
     <span class="note">댐퍼 개방 (기록용)</span>
     <button data-d="0">0</button><button data-d="25">25</button><button data-d="50">50</button><button data-d="75">75</button><button data-d="100">100</button>
@@ -137,7 +158,7 @@
 <script>
 // 부자로스터 B30s BLE: FFE0/FFE1, 프레임 02 LEN payload 03 (PROTOCOL.md)
 const SVC = 0xffe0, CHR = 0xffe1;
-// 읽기 전용: 이 두 프레임 말고는 절대 보내지 않는다
+// 기본은 읽기 전용: 이 두 프레임만. 제어 명령은 control.js에서 제어 모드를 켰을 때만
 const SAFE = { hello: [0x02, 0x02, 0x61, 0x52, 0x03], status: [0x02, 0x01, 0x43, 0x03] };
 
 const $ = id => document.getElementById(id);
@@ -151,9 +172,15 @@ let t0 = null, chargeAt = null;
 function log(s) { const el = $('log'); el.textContent = `${new Date().toLocaleTimeString()} ${s}\n` + el.textContent.slice(0, 4000); }
 const hex = a => [...a].map(b => b.toString(16).padStart(2, '0')).join(' ');
 
-async function send(frame) {
-  if (frame !== SAFE.hello && frame !== SAFE.status) throw new Error('읽기 전용 모드: 허용되지 않은 명령');
-  await chr.writeValueWithResponse(new Uint8Array(frame));
+// 블루투스 쓰기는 한 번에 하나씩 (겹치면 GATT operation already in progress)
+// 상태 요청 말고는 control.js가 허락한 일회성 명령(버너·쿨링·배출구·정지)만 보낸다 (사용자 허락 2026-10-08)
+let writeChain = Promise.resolve();
+function send(frame) {
+  const ok = frame === SAFE.hello || frame === SAFE.status || (window.CONTROL && CONTROL.allows(frame));
+  if (!ok) return Promise.reject(new Error('허용되지 않은 명령 (제어 모드가 꺼져 있거나 막힌 명령)'));
+  const p = writeChain.then(() => chr.writeValueWithResponse(new Uint8Array(frame)));
+  writeChain = p.catch(() => {});
+  return p;
 }
 
 function onData(e) {
@@ -178,6 +205,7 @@ function handle(p) {
     if (swapped) [t1, t2] = [t2, t1];
     const st = { mode: d[0], bt: t1, et: t2, burner: d[5], fan: d[7], drop: d[8], target: (d[11] << 8) | d[12] };
     addSample(st);
+    if (window.CONTROL) CONTROL.onStatus(st);
   } else if (p[0] === 0x61) log('로스터 응답: 연결 확인');
   else log('응답 ' + hex(p));
 }
@@ -342,6 +370,7 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=7"></script>
+<script src="ai.js?v=8"></script>
+<script src="control.js?v=8"></script>
 </body>
 </html>
