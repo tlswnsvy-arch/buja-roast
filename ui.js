@@ -70,6 +70,19 @@
     try { const v = localStorage.getItem(id); if (v) $(id).value = v; } catch {}
     $(id).addEventListener('change', () => { try { localStorage.setItem(id, $(id).value); } catch {} });
   }
+  // 맨 위 🔊/🔇: 음성 끄기 (삑 소리와 진동은 남김)
+  const showMute = () => {
+    let m = '0'; try { m = localStorage.getItem('mute') || '0'; } catch {}
+    $('muteBtn').textContent = m === '1' ? '🔇 음성 끔' : '🔊 음성';
+    $('muteBtn').style.opacity = m === '1' ? '.7' : '1';
+  };
+  $('muteBtn').onclick = () => {
+    let m = '0'; try { m = localStorage.getItem('mute') || '0'; } catch {}
+    try { localStorage.setItem('mute', m === '1' ? '0' : '1'); } catch {}
+    if (m !== '1') ALARM.stopSpeaking();
+    showMute();
+  };
+  showMute();
   $('voiceTest').onclick = () => { ALARM.unlock(); ALARM.stopSpeaking(); ALARM.speak('투입 준비 완료. 생두를 넣으세요.'); };
 
   recipeLine();

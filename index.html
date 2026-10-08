@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>부자 AI 로스팅</title>
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=26">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -16,12 +16,13 @@
     <div class="brand">☕ 부자 AI 로스팅 <span class="note" id="modeTag">(읽기 전용)</span></div>
     <span id="state">연결 안 됨</span>
     <button class="main" id="connect">로스터 연결</button>
+    <button id="muteBtn" title="음성 켜기/끄기">🔊</button>
     <button id="stopAll" class="stop">전체 정지</button>
   </header>
   <div class="tiles">
     <div class="tile" id="bt"><div class="k">BT 원두</div><div class="v">-</div><div class="s">RoR -</div></div>
     <div class="tile" id="et"><div class="k">ET 배기</div><div class="v">-</div><div class="s">RoR -</div></div>
-    <div class="tile" id="burner"><div class="k">버너</div><div class="v">-</div><div class="s" id="damperNow">댐퍼 100%</div></div>
+    <div class="tile" id="burner"><div class="k">버너</div><div class="v">-</div><div class="s" id="damperNow">댐퍼 10칸 (풀개방)</div></div>
     <div class="tile" id="timer"><div class="k">경과 시간</div><div class="v">0:00</div><div class="s" id="phase">투입 전</div></div>
   </div>
   <div class="chips statusChips">
@@ -54,9 +55,8 @@
     </div>
     <div id="events" class="note"></div>
     <div class="row" id="damperRow">
-      <span class="note">댐퍼 (기록용)</span>
-      <button data-d="0">0</button><button data-d="25">25</button><button data-d="50">50</button><button data-d="75">75</button><button data-d="100">100</button>
-      <input id="damperIn" type="number" min="0" max="100" step="5" style="width:80px" placeholder="%">
+      <span class="note">댐퍼 칸 (돌린 뒤 눌러서 기록 · 10칸 = 풀개방)</span>
+      <button data-d="100">10</button><button data-d="90">9</button><button data-d="80">8</button><button data-d="70">7</button><button data-d="60">6</button><button data-d="50">5</button><button data-d="40">4</button><button data-d="30">3</button><button data-d="20">2</button><button data-d="10">1</button>
     </div>
     <section class="card" id="ctlCard">
       <div class="row">
@@ -275,6 +275,17 @@ function addSample(st) {
 function autoDetect(st) {
   const s = samples.at(-1), back = samples.find(x => x.t >= s.t - 6);
   if (!back) return;
+  // 지금 구간: 건조(투입~노래지는 약 155도) → 마이야르(~1차 크랙) → 디벨롭
+  if (chargeAt != null && !events['배출']) {
+    const fc = events['1차 크랙'];
+    let ph;
+    if (fc) {
+      // 1차 크랙 뒤: DT(경과 초)와 상승폭, 목표가 있으면 같이
+      const dt = Math.round(s.t - fc.t), up = s.bt - fc.bt, r = typeof lastRec !== 'undefined' ? lastRec : null;
+      ph = `디벨롭 ${fmt(dt)} · +${up}°` + (r?.rise ? ` (목표 +${r.rise}° / ${r.dtSec ?? 60}초)` : '');
+    } else ph = (events.TP || s.t - chargeAt > 90) && s.bt >= 155 ? '마이야르' : '건조 중';
+    if ($('phase').textContent !== ph) $('phase').textContent = ph;
+  }
   const drop6 = back.bt - s.bt;
   if (chargeAt == null && back.bt >= 120 && drop6 >= 15) {
     // 급락 직전 최고점을 투입 시점으로
@@ -342,12 +353,18 @@ function draw() {
   const legend = [['BT', C.bt], ['ET', C.et], ['BT RoR', C.ror], ['버너%', C.burner], ['댐퍼%', C.damper], ['AI 목표', C.dim]];
   let lx = L; for (const [n, c] of legend) { g.fillStyle = c; g.fillRect(lx, 9, 14, 3); g.fillStyle = C.text; g.fillText(n, lx + 18, 14); lx += g.measureText(n).width + 34; }
   if (chargeAt == null && samples.length) { g.fillStyle = C.dim; g.fillText('예열 중 · 투입하면 0:00부터 새로 그려요', L + 8, T + 16); }
+  if (chargeAt != null && samples.length) {
+    const now = $('phase').textContent; g.font = 'bold 15px sans-serif';
+    const tw = g.measureText('지금: ' + now).width, bx = W - R - tw - 14, by = T + h - 30;
+    g.fillStyle = 'rgba(20,20,22,.85)'; g.fillRect(bx - 6, by - 17, tw + 16, 24);
+    g.fillStyle = events['1차 크랙'] ? '#ffb38a' : '#ffd88a'; g.fillText('지금: ' + now, bx, by); g.font = '11px sans-serif';
+  }
 
-  // 단계 띠 (아래): 건조(투입~옐로 160도) · 메일라드(~1차 크랙) · 디벨롭(~배출), 시간과 비율
+  // 단계 띠 (아래): 건조(투입~옐로 160도) · 마이야르(~1차 크랙) · 디벨롭(~배출), 시간과 비율
   if (chargeAt != null) {
     const yp = samples.find(s => s.t > chargeAt + 30 && s.bt >= 160), fc = events['1차 크랙'];
     const endT = dropT ?? ((samples.at(-1)?.t ?? t0) - t0);
-    const bands = [['건조', 0, yp ? yp.t - t0 : endT, '#3d5a3a'], ['메일라드', yp ? yp.t - t0 : null, fc ? fc.t - t0 : endT, '#6b5a2a'], ['디벨롭', fc ? fc.t - t0 : null, endT, '#6b3a2a']];
+    const bands = [['건조', 0, yp ? yp.t - t0 : endT, '#3d5a3a'], ['마이야르', yp ? yp.t - t0 : null, fc ? fc.t - t0 : endT, '#6b5a2a'], ['디벨롭', fc ? fc.t - t0 : null, endT, '#6b3a2a']];
     for (const [n, s0, s1, col] of bands) {
       if (s0 == null || s1 <= s0) continue;
       const bx = x(s0), bw = x(s1) - x(s0), by = T + h + 20;
@@ -358,6 +375,15 @@ function draw() {
   }
 
   g.save(); g.beginPath(); g.rect(L, T, w, h); g.clip();   // 선이 그래프 밖으로 나가지 않게
+  // 구간 배경 (파이어스코프처럼): 건조 초록, 마이야르 노랑, 디벨롭 주황을 아주 옅게
+  if (chargeAt != null) {
+    const yp2 = samples.find(s => s.t > chargeAt + 30 && s.bt >= 155), fc2 = events['1차 크랙'];
+    const endT3 = dropT ?? ((samples.at(-1)?.t ?? t0) - t0);
+    const shade = (a, b, col) => { if (a == null || b <= a) return; g.fillStyle = col; g.fillRect(x(a), T, x(b) - x(a), h); };
+    shade(0, yp2 ? yp2.t - t0 : endT3, 'rgba(90,160,90,.07)');
+    shade(yp2 ? yp2.t - t0 : null, fc2 ? fc2.t - t0 : endT3, 'rgba(220,180,60,.08)');
+    shade(fc2 ? fc2.t - t0 : null, endT3, 'rgba(230,110,60,.10)');
+  }
   if (chargeAt != null) { g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(x(tMin), T, x(0) - x(tMin), h); }
   const view = samples.filter(s => s.t - t0 >= tMin && s.t - t0 <= tEnd).map(s => ({ ...s, t: s.t - t0 }));
   const line = (key, color, f = y, src = view, width = 2) => { g.strokeStyle = color; g.lineWidth = width; g.beginPath(); src.forEach((s, i) => i ? g.lineTo(x(s.t), f(s[key])) : g.moveTo(x(s.t), f(s[key]))); g.stroke(); };
@@ -430,16 +456,17 @@ $('e2C').onclick = () => mark('2차 크랙');
 $('eDrop').onclick = () => mark('배출');
 $('swap').onclick = () => { swapped = !swapped; log('BT/ET 순서 바꿈'); };
 $('save').onclick = saveCsv;
+// 댐퍼는 다이얼 칸으로 보여준다: 10칸 = 풀개방, 1칸 = 가장 닫힘 (내부 값은 칸×10)
+const damperText = v => `댐퍼 ${Math.round(v / 10)}칸${v >= 100 ? ' (풀개방)' : ''}`;
 function setDamper(v) {
   v = Math.max(0, Math.min(100, Math.round(+v))); if (isNaN(v)) return;
-  damper = v; $('damperNow').textContent = `댐퍼 ${v}%`;
+  damper = v; $('damperNow').textContent = damperText(v);
   const t = samples.at(-1)?.t ?? 0;
   damperLog.push({ t, v });
-  if (chargeAt != null) log(`댐퍼 ${v}% (${fmt(t - chargeAt)})`);
+  if (chargeAt != null) log(`${damperText(v)} (${fmt(t - chargeAt)})`);
   draw();
 }
 document.querySelectorAll('#damperRow button').forEach(b => b.onclick = () => setDamper(b.dataset.d));
-$('damperIn').addEventListener('change', e => setDamper(e.target.value));
 addEventListener('resize', draw);
 // 화면 확인용 가짜 데이터: 주소 끝에 ?demo
 if (location.search.includes('demo')) {
@@ -448,9 +475,9 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=23"></script>
+<script src="ai.js?v=24"></script>
 <script src="control.js?v=17"></script>
-<script src="auto.js?v=21"></script>
-<script src="ui.js?v=17"></script>
+<script src="auto.js?v=27"></script>
+<script src="ui.js?v=27"></script>
 </body>
 </html>

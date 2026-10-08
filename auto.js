@@ -67,7 +67,10 @@ window.ALARM = (() => {
     if (cur) out.push(cur);
     return out;
   }
+  // 음성 끔(🔇)이면 말은 안 하고, ring()의 삑 소리·진동만 남는다
+  const muted = () => pref('mute', '0') === '1';
   function speak(text) {
+    if (muted()) return;
     if (pref('voiceMode', 'ai') === 'ai') {
       unlock();
       const my = gen, parts = chunks(text);
@@ -106,7 +109,7 @@ window.ALARM = (() => {
 
 window.AUTO = (() => {
   let paused = null, on = false, phase = 'off', mode = 'full', target = 0, burnerNow = null, lastSet = 0, adj = 0, lastAdjAt = 0,
-    holdSince = 0, readyRung = false, fcWarned = false, wake = null, stepIdx = 0, holdBase = 40, coolTimer = null, preStart = 0, stallSince = 0;
+    holdSince = 0, readyRung = false, fcWarned = false, wake = null, stepIdx = 0, holdBase = 40, coolTimer = null, preStart = 0, stallSince = 0, maillardSaid = false, damperSaid = false;
   const PREHEAT_MAX_MIN = 20;
   const say = t => { $('autoMsg').textContent = t; log('자동: ' + t); };
 
@@ -126,7 +129,7 @@ window.AUTO = (() => {
     paused = null; $('resumeBtn').style.display = 'none';
     ALARM.unlock();
     mode = m; target = preheatTo;
-    on = true; adj = 0; holdSince = 0; preStart = 0; stallSince = 0; readyRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
+    on = true; adj = 0; holdSince = 0; preStart = 0; stallSince = 0; maillardSaid = false; damperSaid = false; readyRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
     phase = chargeAt == null ? 'preheat' : 'roast';
     try { wake = await navigator.wakeLock?.request('screen'); } catch {}   // 화면이 꺼지면 안전장치가 버너를 끄므로 켜둔다
     $('autoBanner').style.display = 'block';
@@ -263,9 +266,20 @@ window.AUTO = (() => {
     const v = Math.max(0, Math.min(100, planned + adj));
     if (v !== burnerNow && now - lastSet > 3000) setBurner(v, `BT ${st.bt}° 계획 ${planned}%${adj ? ` 보정 ${adj > 0 ? '+' : ''}${adj}` : ''}`);
 
+    // 구간 표시와 마이야르 시작 안내 (생두가 노래지는 BT 약 150~160도)
+    const yellowT = 155;
+    if (!fc && !maillardSaid && (events.TP || el > 90) && st.bt >= yellowT) {
+      maillardSaid = true;
+      const dc = r.damperChange;
+      const damperMsg = dc && dc.notch && (!dc.atBt || dc.atBt <= yellowT + 5) ? ` 댐퍼를 ${dc.notch}칸으로 돌리고 화면의 ${dc.notch}을 눌러 주세요.` : '';
+      ALARM.ring('지금부터 마이야르 구간이에요.' + damperMsg, 2);
+    }
+    if (r.damperChange?.atBt && r.damperChange.atBt > yellowT + 5 && !damperSaid && st.bt >= r.damperChange.atBt && !fc) {
+      damperSaid = true; ALARM.ring(`댐퍼를 ${r.damperChange.notch}칸으로 돌려 주세요`, 2);
+    }
     // 1차 크랙이 곧 올 때 알림 (귀 기울이세요)
     const fcT = r.expected?.fcTemp || 186;
-    if (!fc && !fcWarned && st.bt >= fcT - 6) { fcWarned = true; ALARM.ring('곧 1차 크랙이에요. 첫 크랙 들리면 버튼을 누르세요', 2); }
+    if (!fc && !fcWarned && (events.TP || el > 120) && st.bt >= fcT - 6) { fcWarned = true; ALARM.ring('곧 1차 크랙이에요. 첫 크랙 들리면 버튼을 누르세요', 2); }
 
     // 자동 배출: 1차 크랙 온도 + 목표 상승폭에 닿으면 (일찍 닿아도 끌지 않음), DT가 지나면.
     // 상승폭이 4도 이내로 모자라고 RoR이 살아 있으면 DT+15초까지 기다린다 (첫 실전: +5도에서 끊김)

@@ -57,7 +57,9 @@ canvas { width:100%; height:min(56vh,620px); background:var(--card); border-radi
 #e2C { background:#2e2030; border-color:#5d3a63; }
 #eDrop { background:#1e3326; border-color:#2f6b45; }
 #events { min-height:18px; }
-#damperRow button { min-width:56px; }
+#damperRow { flex-wrap:nowrap; }
+#damperRow button { min-width:0; flex:1; padding:11px 0; }
+#damperRow .note { flex:none; max-width:150px; }
 #recipeLine { font-size:15px; color:var(--text); background:var(--card2); border-radius:10px; padding:10px 12px; }
 details > summary { cursor:pointer; color:var(--text); font-size:15px; padding:4px 0; }
 details.warn { background:#3a1717; color:#ffd0d0; border-radius:10px; padding:10px 12px; font-size:14px; line-height:1.6; }
