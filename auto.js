@@ -53,6 +53,7 @@ window.AUTO = (() => {
 
   function start() {
     const r = lastRec;
+    if (window.autoSaveBean) autoSaveBean(true);   // 볶은 생두는 목록에 자동으로 남긴다
     if (!r || !r.charge || !r.steps?.length) return say('먼저 AI 프로파일 추천을 받으세요');
     begin('full', +r.charge);
   }

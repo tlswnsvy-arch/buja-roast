@@ -147,6 +147,7 @@ JSON으로만 답해라:
 "expected":{"tpSec":초,"tpTemp":온도,"fcSec":초,"fcTemp":온도,"dropSec":초},"dtr":목표DTR%,"nextTry":"이번 결과를 커핑한 뒤 다음 배치에서 바꿔볼 한 가지",
 "why":["이유 2~4개"],"watch":["로스팅 중 볼 것 2~4개(언제 무엇을 하면 되는지)"],"flavor":"예상되는 맛"}`;
     const r = await gemini([{ role: 'user', parts: [{ text: prompt }] }], { json: true, system: SYSTEM });
+    autoSaveBean(true);
     pushHistory('새 추천 받기 전');
     lastRec = { ...r, bean: readBean(), at: new Date().toISOString() };
     store.set('lastRec', lastRec);
@@ -237,6 +238,7 @@ function undoRec() {
 function saveBeanProfile() {
   const name = $v('bName'); if (!name || !lastRec) return;
   const all = store.get('beanProfiles', {}); all[name] = lastRec; store.set('beanProfiles', all);
+  if (typeof renderBeans === 'function') renderBeans();
 }
 
 // ---------- 배출 뒤 AI 리뷰: 다음 배치 개선점을 골라서 적용 ----------
@@ -370,13 +372,13 @@ window.onMark = async name => {
   if (name === '배출') {
     const fc = events['1차 크랙'], d = events['배출'];
     const rec = {
-      source: 'web', date: new Date().toISOString().slice(0, 16).replace('T', ' '), bean: readBean(),
+      source: 'web', ts: Date.now(), date: new Date().toISOString().slice(0, 16).replace('T', ' '), bean: readBean(),
       charge: events['투입']?.bt, fc: fc ? `${fc.bt}@${mmss(fc.t - chargeAt)}` : null, drop: `${d.bt}@${mmss(d.t - chargeAt)}`,
       dtr: fc ? +((d.t - fc.t) / (d.t - chargeAt) * 100).toFixed(1) : null, rec: lastRec && { charge: lastRec.charge, steps: lastRec.steps, drop: lastRec.drop },
       curve: samples.filter((_, i) => i % 5 === 0).map(s => [Math.round(s.t - chargeAt), s.bt, s.et, s.burner, s.damper]), damperLog: damperLog.map(d => [Math.round(d.t - chargeAt), d.v]),
     };
     const all = store.get('myRoasts', []); all.push(rec); store.set('myRoasts', all.slice(-100));
-    coach('로스팅 기록을 이 기기에 저장했어요. AI 리뷰는 아래 AI 로스팅 도우미 칸에 나와요.');
+    coach('로스팅 기록을 저장했어요. AI 리뷰는 레시피 탭 아래쪽(4. 볶은 뒤)에 나와요.');
     review(rec);
   }
 };
@@ -424,9 +426,9 @@ function beanList() {
   return { saved, fromHist };
 }
 function renderBeans() {
-  const { saved, fromHist } = beanList(), sel = $('beanPick');
+  const { saved, fromHist } = beanList(), sel = $('beanPick'), profs = store.get('beanProfiles', {});
   sel.innerHTML = '<option value="">내 생두에서 고르기</option>' +
-    (saved.length ? `<optgroup label="저장한 생두">${saved.map((b, i) => `<option value="s${i}">${b.name}</option>`).join('')}</optgroup>` : '') +
+    (saved.length ? `<optgroup label="저장한 생두 (최근 순)">${saved.map((b, i) => [b, i]).sort((x, y) => (y[0].usedAt || '').localeCompare(x[0].usedAt || '')).map(([b, i]) => `<option value="s${i}">${b.name}${b.usedAt ? ' · ' + b.usedAt.slice(5).replace('-', '/') : ''}${profs[b.name] ? ' · 설정 있음' : ''}</option>`).join('')}</optgroup>` : '') +
     (fromHist.length ? `<optgroup label="예전 로스팅 기록에서">${fromHist.map((b, i) => `<option value="h${i}">${b.name}</option>`).join('')}</optgroup>` : '');
 }
 $('beanPick').onchange = () => {
@@ -439,11 +441,17 @@ $('beanPick').onchange = () => {
   if (prof) { lastRec = prof; store.set('lastRec', prof); renderRec(); log('이 생두의 지난 프로파일을 불러왔어요'); }
   syncChips();
 };
-$('beanSave').onclick = () => {
-  const b = readBean(); if (!b.name) { alertBox('생두 이름을 먼저 넣어주세요'); return; }
-  const saved = store.get('beans', []).filter(x => x.name !== b.name); saved.push(b);
-  store.set('beans', saved); renderBeans(); log('생두 저장: ' + b.name);
-};
+// 생두 정보 저장 (추천받기·자동 로스팅 시작 때도 자동으로). 마지막 사용 날짜를 같이 남긴다
+function autoSaveBean(quiet) {
+  autoName();
+  const b = readBean(); if (!b.name) return false;
+  const old = store.get('beans', []), prev = old.find(x => x.name === b.name);
+  const saved = old.filter(x => x.name !== b.name); saved.push({ ...prev, ...b, usedAt: new Date().toISOString().slice(0, 10) });
+  store.set('beans', saved); renderBeans(); if (!quiet) log('생두 저장: ' + b.name);
+  return true;
+}
+window.autoSaveBean = autoSaveBean;
+$('beanSave').onclick = () => { if (!autoSaveBean()) alertBox('생두 이름을 먼저 넣어주세요'); };
 $('beanDel').onclick = () => {
   const v = $('beanPick').value; if (!v.startsWith('s')) return;
   const saved = store.get('beans', []); saved.splice(+v.slice(1), 1); store.set('beans', saved); renderBeans();
