@@ -26,7 +26,12 @@
   .chip.on { color:#111; background:var(--ok); }
   #tasteChips .chip { cursor:pointer; user-select:none; border:1px solid var(--line); background:var(--bg); }
   #tasteChips .chip.on { background:#d9a441; color:#111; border-color:#d9a441; }
-  canvas { width:100%; height:420px; background:var(--card); border-radius:12px; display:block; }
+  #top { position:sticky; top:0; z-index:10; background:var(--bg); box-shadow:0 2px 8px rgba(0,0,0,.4); }
+  #top .tiles { padding:8px 16px; gap:8px; }
+  #top .tile { padding:8px 12px; }
+  #top .tile .v { font-size:30px; margin-top:0; }
+  #top #autoBanner, #top #coach { margin:0 16px 8px; }
+  canvas { width:100%; height:440px; background:var(--card); border-radius:12px; display:block; }
   .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   #events { font-size:14px; color:var(--dim); }
   #log { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--dim); background:var(--card); border-radius:12px; padding:10px; max-height:160px; overflow:auto; white-space:pre-wrap; }
@@ -48,23 +53,44 @@
 </style>
 </head>
 <body>
+<div id="top">
 <header>
   <h1>부자 AI 로스팅 <span class="note" id="modeTag">(읽기 전용)</span></h1>
   <span id="state">연결 안 됨</span>
   <button class="main" id="connect">로스터 연결</button>
 </header>
-<main>
   <div class="tiles">
     <div class="tile" id="bt"><div class="k">BT 원두 온도</div><div class="v">-</div><div class="s">RoR -</div></div>
     <div class="tile" id="et"><div class="k">ET 배기 온도</div><div class="v">-</div><div class="s">RoR -</div></div>
     <div class="tile" id="burner"><div class="k">버너</div><div class="v">-</div><div class="s">&nbsp;</div></div>
     <div class="tile" id="timer"><div class="k">경과 시간</div><div class="v">0:00</div><div class="s" id="phase">투입 전</div></div>
   </div>
+  <div id="autoBanner" style="display:none;background:#c62828;color:#fff;font-weight:700;padding:10px 14px;border-radius:10px">AI 자동 로스팅 중 · 로스터 옆을 떠나지 마세요 · 문제가 있으면 전체 정지</div>
+  <button id="resumeBtn" style="display:none;margin:0 16px 8px;width:calc(100% - 32px);background:#2e7d32;border-color:#2e7d32;color:#fff;font-size:20px;font-weight:700;padding:16px">화면을 벗어나서 버너를 껐어요 · 눌러서 자동 이어가기</button>
+  <div id="coach"></div>
+</div>
+<main>
   <div class="chips">
     <span class="chip" id="cMode">모드 -</span>
     <span class="chip" id="cFan">쿨링</span>
     <span class="chip" id="cDrop">배출구</span>
     <span class="chip" id="cTarget">예열 목표 -</span>
+  </div>
+  <canvas id="chart"></canvas>
+  <div class="row">
+    <button id="eCharge" disabled>투입</button>
+    <button id="e1C" disabled>1차 크랙</button>
+    <button id="e2C" disabled>2차 크랙</button>
+    <button id="eDrop" disabled>배출</button>
+    <button id="swap">BT/ET 바꾸기</button>
+    <button id="save">기록 저장(CSV)</button>
+    <span id="events"></span>
+  </div>
+  <div class="row" id="damperRow">
+    <span class="note">댐퍼 개방 (기록용)</span>
+    <button data-d="0">0</button><button data-d="25">25</button><button data-d="50">50</button><button data-d="75">75</button><button data-d="100">100</button>
+    <input id="damperIn" type="number" min="0" max="100" step="5" style="width:80px" placeholder="%">
+    <span id="damperNow" class="chip">댐퍼 100%</span>
   </div>
   <section class="card" id="ctlCard">
     <div class="row">
@@ -95,29 +121,21 @@
           <label style="display:flex;align-items:center;gap:8px;color:var(--text)"><input type="checkbox" id="autoAck" style="width:22px;height:22px"> 끝날 때까지 옆에서 지켜볼게요</label>
           <button id="autoStart" style="background:#2e7d32;border-color:#2e7d32;font-weight:700">AI 자동 로스팅 시작</button>
         </div>
+        <div class="row">
+          <span class="note">예열만</span>
+          <input id="preheatTo" type="number" min="120" max="240" step="1" style="width:90px" placeholder="°C">
+          <button id="preheatStart">예열만 시작</button>
+          <span class="note">투입하면 자동이 멈추고 손으로 이어가요</span>
+        </div>
+        <div class="row">
+          <span class="note">배출 뒤 쿨링</span>
+          <select id="coolMin" style="width:auto"><option value="0">손으로 끄기</option><option value="3">3분 뒤 자동 끄기</option><option value="4" selected>4분 뒤 자동 끄기</option><option value="5">5분 뒤 자동 끄기</option></select>
+        </div>
         <div id="autoMsg" style="font-size:16px"></div>
       </div>
     </div>
   </section>
-  <div class="row" id="damperRow">
-    <span class="note">댐퍼 개방 (기록용)</span>
-    <button data-d="0">0</button><button data-d="25">25</button><button data-d="50">50</button><button data-d="75">75</button><button data-d="100">100</button>
-    <input id="damperIn" type="number" min="0" max="100" step="5" style="width:80px" placeholder="%">
-    <span id="damperNow" class="chip">댐퍼 100%</span>
-  </div>
-  <div id="autoBanner" style="display:none;background:#c62828;color:#fff;font-weight:700;padding:10px 14px;border-radius:10px">AI 자동 로스팅 중 · 로스터 옆을 떠나지 마세요 · 문제가 있으면 전체 정지</div>
-  <div id="coach"></div>
-  <canvas id="chart"></canvas>
-  <div class="row">
-    <button id="eCharge" disabled>투입</button>
-    <button id="e1C" disabled>1차 크랙</button>
-    <button id="e2C" disabled>2차 크랙</button>
-    <button id="eDrop" disabled>배출</button>
-    <button id="swap">BT/ET 바꾸기</button>
-    <button id="save">기록 저장(CSV)</button>
-    <span id="events"></span>
-  </div>
-  <div class="note">이 화면은 로스터에 상태 요청만 보내고 불·쿨링·배출 명령은 보내지 않아요. 사용 중에는 부자 앱 연결을 끊어주세요.</div>
+  <div class="note">사용 중에는 부자 앱을 닫아주세요 (블루투스는 한 기기만 연결돼요). 제어 칸을 켜기 전에는 상태만 읽어요.</div>
   <section class="card">
     <h2>AI 로스팅 도우미</h2>
     <div class="row">
@@ -148,6 +166,9 @@
       <span class="note" id="weather">날씨 불러오는 중...</span>
     </div>
     <div id="rec"></div>
+    <div id="review" style="display:grid;gap:8px;line-height:1.6"></div>
+    <label>이번 배치 맛 평가 (마셔보고 적으면 다음 리뷰에 반영돼요)<input id="cupNote" placeholder="예: 산미 밝고 깔끔, 단맛 약함, 약간 곡물맛"></label>
+    <div class="row"><button id="reviewLast">마지막 배치 리뷰 받기</button><span class="note">맛 평가를 적은 뒤 누르면 맛까지 반영해서 다음 배치 개선점을 골라줘요</span></div>
   </section>
   <section class="card">
     <h2>AI에게 물어보기</h2>
@@ -250,7 +271,8 @@ function addSample(st) {
   $('cFan').classList.toggle('on', !!st.fan);
   $('cDrop').classList.toggle('on', !!st.drop);
   $('cTarget').textContent = '예열 목표 ' + (st.target || '-') + (st.target ? '°' : '');
-  const el = chargeAt == null ? 0 : samples[samples.length - 1].t - chargeAt;
+  // 배출하면 시간은 배출 시점에서 멈춘다
+  const el = chargeAt == null ? 0 : (events['배출'] ? events['배출'].t : samples[samples.length - 1].t) - chargeAt;
   $('timer').querySelector('.v').textContent = `${Math.floor(el / 60)}:${String(Math.floor(el % 60)).padStart(2, '0')}`;
   draw();
   autoDetect(st);
@@ -303,24 +325,71 @@ function draw() {
   cv.width = W * dpr; cv.height = H * dpr;
   const g = cv.getContext('2d'); g.scale(dpr, dpr);
   const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  const L = 40, R = 40, T = 12, B = 24, w = W - L - R, h = H - T - B;
-  const tMax = Math.max(600, (samples.at(-1)?.t ?? 0) + 30);
-  const x = t => L + t / tMax * w, y = v => T + h - v / 250 * h, yr = v => T + h - v / 50 * h;
-  g.font = '11px sans-serif'; g.fillStyle = css('--dim'); g.strokeStyle = css('--line'); g.lineWidth = 1;
-  for (let v = 0; v <= 250; v += 50) { g.beginPath(); g.moveTo(L, y(v)); g.lineTo(W - R, y(v)); g.stroke(); g.fillText(v, 6, y(v) + 4); g.fillText(v / 5, W - R + 6, y(v) + 4); }
-  for (let t = 0; t <= tMax; t += 60) g.fillText(t / 60, x(t) - 3, H - 6);
-  const line = (key, color, f = y, src = samples) => { g.strokeStyle = color; g.lineWidth = 2; g.beginPath(); src.forEach((s, i) => i ? g.lineTo(x(s.t), f(s[key])) : g.moveTo(x(s.t), f(s[key]))); g.stroke(); };
-  // AI 추천 목표 곡선 (투입 시점 기준, 점선)
-  if (window.TARGET && chargeAt != null) {
-    g.setLineDash([6, 6]); line('bt', css('--dim'), y, TARGET.map(p => ({ t: p.t + chargeAt, bt: p.bt }))); g.setLineDash([]);
+  const C = { bt: css('--bt'), et: css('--et'), ror: css('--ror'), burner: css('--burner'), dim: css('--dim'), line: css('--line'), text: css('--text'), damper: '#6fbf9a' };
+  const L = 40, R = 40, T = 30, B = 46, w = W - L - R, h = H - T - B;
+  // 투입 뒤에는 투입 순간을 0:00으로, 그 전 30초만 흐리게. 배출 60초 뒤까지만 그린다. 투입 전(예열)에는 예열 시작부터
+  const t0 = chargeAt ?? (samples[0]?.t ?? 0);
+  const tMin = chargeAt != null ? -30 : 0;
+  const dropT = events['배출'] ? events['배출'].t - t0 : null;
+  const tEnd = Math.min((samples.at(-1)?.t ?? 0) - t0, dropT != null ? dropT + 60 : Infinity);
+  const tMax = Math.max(chargeAt != null ? 540 : 300, tEnd + 30);
+  const x = t => L + (t - tMin) / (tMax - tMin) * w, y = v => T + h - v / 250 * h, yr = v => T + h - Math.max(-2, Math.min(52, v)) / 50 * h;
+  const fmtT = s => `${s < 0 ? '-' : ''}${Math.floor(Math.abs(s) / 60)}:${String(Math.floor(Math.abs(s) % 60)).padStart(2, '0')}`;
+
+  // 눈금: 온도 25도마다 가는 선, 50도마다 숫자 / 1분마다 세로선
+  g.font = '11px sans-serif'; g.lineWidth = 1;
+  for (let v = 0; v <= 250; v += 25) { g.strokeStyle = v % 50 ? 'rgba(255,255,255,.04)' : C.line; g.beginPath(); g.moveTo(L, y(v)); g.lineTo(W - R, y(v)); g.stroke(); if (v % 50 === 0) { g.fillStyle = C.dim; g.fillText(v, 8, y(v) + 4); g.fillText(v / 5, W - R + 8, y(v) + 4); } }
+  for (let t = 0; t <= tMax; t += 60) { g.strokeStyle = 'rgba(255,255,255,.05)'; g.beginPath(); g.moveTo(x(t), T); g.lineTo(x(t), T + h); g.stroke(); g.fillStyle = C.dim; g.fillText(t / 60, x(t) - 3, T + h + 14); }
+  g.fillStyle = C.dim; g.fillText('°C', 8, T - 8); g.fillText('RoR', W - R + 4, T - 8); g.fillText('분', W - R + 8, T + h + 14);
+
+  // 범례
+  const legend = [['BT', C.bt], ['ET', C.et], ['BT RoR', C.ror], ['버너%', C.burner], ['댐퍼%', C.damper], ['AI 목표', C.dim]];
+  let lx = L; for (const [n, c] of legend) { g.fillStyle = c; g.fillRect(lx, 9, 14, 3); g.fillStyle = C.text; g.fillText(n, lx + 18, 14); lx += g.measureText(n).width + 34; }
+  if (chargeAt == null && samples.length) { g.fillStyle = C.dim; g.fillText('예열 중 · 투입하면 0:00부터 새로 그려요', L + 8, T + 16); }
+
+  // 단계 띠 (아래): 건조(투입~옐로 160도) · 메일라드(~1차 크랙) · 디벨롭(~배출), 시간과 비율
+  if (chargeAt != null) {
+    const yp = samples.find(s => s.t > chargeAt + 30 && s.bt >= 160), fc = events['1차 크랙'];
+    const endT = dropT ?? ((samples.at(-1)?.t ?? t0) - t0);
+    const bands = [['건조', 0, yp ? yp.t - t0 : endT, '#3d5a3a'], ['메일라드', yp ? yp.t - t0 : null, fc ? fc.t - t0 : endT, '#6b5a2a'], ['디벨롭', fc ? fc.t - t0 : null, endT, '#6b3a2a']];
+    for (const [n, s0, s1, col] of bands) {
+      if (s0 == null || s1 <= s0) continue;
+      const bx = x(s0), bw = x(s1) - x(s0), by = T + h + 20;
+      g.fillStyle = col; g.fillRect(bx, by, bw, 18);
+      g.fillStyle = C.text; const label = `${n} ${fmtT(s1 - s0)} ${endT > 0 ? Math.round((s1 - s0) / endT * 100) : 0}%`;
+      if (g.measureText(label).width < bw - 6) g.fillText(label, bx + 4, by + 13); else if (g.measureText(n).width < bw - 4) g.fillText(n, bx + 3, by + 13);
+    }
   }
-  line('burner', css('--burner'), v => y(v));
-  g.setLineDash([2, 4]); line('damper', '#6fbf9a', v => y(v)); g.setLineDash([]);
-  line('et', css('--et')); line('bt', css('--bt'));
-  const rs = []; for (let i = 0; i < samples.length; i++) { const r = ror('bt', i); if (r != null) rs.push({ t: samples[i].t, r }); }
-  line('r', css('--ror'), yr, rs);
-  g.fillStyle = css('--text');
-  for (const [k, v] of Object.entries(events)) { g.strokeStyle = css('--dim'); g.setLineDash([4, 4]); g.beginPath(); g.moveTo(x(v.t), T); g.lineTo(x(v.t), T + h); g.stroke(); g.setLineDash([]); g.fillText(`${k} ${v.bt}°`, x(v.t) + 4, T + 12); }
+
+  g.save(); g.beginPath(); g.rect(L, T, w, h); g.clip();   // 선이 그래프 밖으로 나가지 않게
+  if (chargeAt != null) { g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(x(tMin), T, x(0) - x(tMin), h); }
+  const view = samples.filter(s => s.t - t0 >= tMin && s.t - t0 <= tEnd).map(s => ({ ...s, t: s.t - t0 }));
+  const line = (key, color, f = y, src = view, width = 2) => { g.strokeStyle = color; g.lineWidth = width; g.beginPath(); src.forEach((s, i) => i ? g.lineTo(x(s.t), f(s[key])) : g.moveTo(x(s.t), f(s[key]))); g.stroke(); };
+  if (window.TARGET && chargeAt != null) { g.setLineDash([6, 6]); line('bt', C.dim, y, TARGET, 1.5); g.setLineDash([]); }
+  line('burner', C.burner, y, view, 1.5);
+  g.setLineDash([2, 4]); line('damper', C.damper, y, view, 1.5); g.setLineDash([]);
+  line('et', C.et); line('bt', C.bt, y, view, 2.5);
+  const rs = []; for (let i = 0; i < samples.length; i++) { const tt = samples[i].t - t0; if (tt < Math.max(tMin, 20) || tt > tEnd) continue; const r = ror('bt', i); if (r != null) rs.push({ t: tt, r }); }
+  line('r', C.ror, yr, rs);
+  // 이벤트 세로선
+  for (const [k, v] of Object.entries(events)) {
+    const tx = x(v.t - t0); g.strokeStyle = C.dim; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(tx, T); g.lineTo(tx, T + h); g.stroke(); g.setLineDash([]);
+    g.save(); g.translate(tx + 4, T + 6); g.rotate(Math.PI / 2); g.fillStyle = C.text; g.fillText(`${k} ${v.bt}° ${fmtT(v.t - t0)}`, 0, 0); g.restore();
+  }
+  // 1차 크랙 뒤 상승폭 표시
+  const fc = events['1차 크랙'], last = view.at(-1);
+  if (fc && last) {
+    const endBt = events['배출'] ? events['배출'].bt : last.bt, endT2 = events['배출'] ? events['배출'].t : (last.t + t0);
+    g.fillStyle = '#ffd88a'; g.font = 'bold 13px sans-serif';
+    g.fillText(`1차 크랙 뒤 +${endBt - fc.bt}° · ${fmtT(endT2 - fc.t)}`, x(fc.t - t0) + 18, y(fc.bt) + 26);
+    g.font = '11px sans-serif';
+  }
+  g.restore();
+  // 지금 값 (오른쪽 끝)
+  if (last) {
+    const tag = (v, col, yy) => { g.fillStyle = col; g.font = 'bold 12px sans-serif'; g.fillText(v, Math.min(x(last.t) + 6, W - R - 34), yy); g.font = '11px sans-serif'; };
+    tag(last.bt + '°', C.bt, y(last.bt) - 6); tag(last.et + '°', C.et, y(last.et) - 6);
+  }
 }
 
 async function connect() {
@@ -383,8 +452,8 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=9"></script>
-<script src="control.js?v=9"></script>
-<script src="auto.js?v=9"></script>
+<script src="ai.js?v=11"></script>
+<script src="control.js?v=11"></script>
+<script src="auto.js?v=11"></script>
 </body>
 </html>
