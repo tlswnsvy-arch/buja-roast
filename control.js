@@ -12,16 +12,27 @@ window.CONTROL = (() => {
     fan: v => [0x02, 0x03, 0x44, 0x46, v, 0x03],
     drop: v => [0x02, 0x03, 0x44, 0x53, v, 0x03],
     halt: () => [0x02, 0x01, 0x48, 0x03],
+    buzz: v => [0x02, 0x03, 0x44, 0x42, v, 0x03],   // 로스터 본체 부저 켜기/끄기 (부자 앱이 예열 끝에 1 → 4초 → 0)
   };
 
   // 허락된 모양인지 바이트 단위로 확인
   function allows(f) {
-    if (!enabled || !Array.isArray(f)) return false;
+    if (!Array.isArray(f)) return false;
+    // 부저는 히터와 상관없는 소리라 제어 모드가 꺼져 있어도 허용
+    if (f.length === 6 && f.join() === frame.buzz(f[4]).join() && (f[4] === 0 || f[4] === 1)) return true;
+    if (!enabled) return false;
     if (f.length === 4) return f.join() === frame.halt().join();
     if (f.length !== 6 || f[0] !== 0x02 || f[1] !== 0x03 || f[2] !== 0x44 || f[5] !== 0x03) return false;
     if (f[3] === 0x48) return Number.isInteger(f[4]) && f[4] >= 0 && f[4] <= 100;
     if (f[3] === 0x46 || f[3] === 0x53) return f[4] === 0 || f[4] === 1;
     return false;
+  }
+
+  // 로스터 본체 부저를 sec초 울린다 (연결돼 있을 때만)
+  let buzzTimer = null;
+  async function buzz(sec = 2) {
+    if (!chr) return;
+    try { await send(frame.buzz(1)); clearTimeout(buzzTimer); buzzTimer = setTimeout(() => send(frame.buzz(0)).catch(() => {}), sec * 1000); } catch {}
   }
 
   const msg = t => { $('ctlMsg').textContent = t; log('제어: ' + t); };
@@ -94,5 +105,5 @@ window.CONTROL = (() => {
   document.querySelectorAll('[data-fan]').forEach(b => twoTap(b, () => cmd('fan', +b.dataset.fan)));
   document.querySelectorAll('[data-drop]').forEach(b => twoTap(b, () => cmd('drop', +b.dataset.drop)));
 
-  return { allows, onStatus, stopAll, cmd, get enabled() { return enabled; }, get last() { return last; } };
+  return { allows, onStatus, stopAll, cmd, buzz, get enabled() { return enabled; }, get last() { return last; } };
 })();

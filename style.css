@@ -108,3 +108,10 @@ details[open].recsec > summary::before { content:'▾ '; }
 /* 상자별 읽어주기 버튼 */
 button.say { padding:4px 10px; font-size:15px; border-radius:10px; background:var(--card); }
 .rech button.say { margin-left:8px; vertical-align:middle; }
+
+/* 원하는 맛 버튼: 추가·지우기 */
+#tasteChips .chip.add { border-style:dashed; color:var(--gold); }
+#tasteChips.editing .chip.word::after { content:' ✕'; color:#ff8a8a; }
+#tasteChips .chip.done { background:var(--green); color:#fff; border-color:var(--green); }
+#tasteAdd { display:flex; gap:6px; align-items:center; }
+#tasteAdd input { width:160px; padding:7px 10px; font-size:15px; }

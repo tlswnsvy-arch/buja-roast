@@ -103,13 +103,13 @@ window.ALARM = (() => {
     } catch {}
   }
   try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); } catch {}
-  const ring = (text, times = 3) => { beep(times); setTimeout(() => speak(text), times * 350 + 100); };
+  const ring = (text, times = 3) => { beep(times); try { window.CONTROL?.buzz(Math.min(3, times)); } catch {} setTimeout(() => speak(text), times * 350 + 100); };
   return { unlock, ring, beep, speak, stopSpeaking };
 })();
 
 window.AUTO = (() => {
   let paused = null, on = false, phase = 'off', mode = 'full', target = 0, burnerNow = null, lastSet = 0, adj = 0, lastAdjAt = 0,
-    holdSince = 0, readyRung = false, fcWarned = false, wake = null, stepIdx = 0, holdBase = 40, coolTimer = null, preStart = 0, stallSince = 0, maillardSaid = false, damperSaid = false;
+    holdSince = 0, readyRung = false, fcWarned = false, wake = null, stepIdx = 0, holdBase = 40, coolTimer = null, preStart = 0, stallSince = 0, maillardSaid = false, damperSaid = false, lastReadyRing = 0;
   const PREHEAT_MAX_MIN = 20;
   const say = t => { $('autoMsg').textContent = t; log('자동: ' + t); };
 
@@ -196,7 +196,24 @@ window.AUTO = (() => {
     }, coolMin * 60000);
   }
 
+  // 배출 뒤 식히기: BT·ET가 모두 80도 아래로 내려가면 "기계 꺼도 돼요" (부자로스터 대표 권장: 80도 이하에서 끄기)
+  const COOL_OFF = 80;
+  let coolSaid = false, coolDropAt = null;
+  function cooldown(st) {
+    const d = events['배출'];
+    if (!d) { coolSaid = false; coolDropAt = null; return; }
+    if (coolDropAt !== d.t) { coolDropAt = d.t; coolSaid = false; }
+    const hot = Math.max(st.bt, st.et);
+    if (!coolSaid) $('phase').textContent = `식는 중 · ${hot}° → ${COOL_OFF}° 아래면 기계 꺼도 돼요`;
+    if (!coolSaid && hot < COOL_OFF) {
+      coolSaid = true;
+      $('phase').textContent = `${hot}° · 이제 기계를 꺼도 돼요`;
+      ALARM.ring(`${COOL_OFF}도 아래로 내려왔어요. 이제 기계를 꺼도 돼요`, 3);
+    }
+  }
+
   function tick(st) {
+    cooldown(st);
     if (!on) return;
     burnerNow = st.burner;
     const r = lastRec, now = Date.now();
@@ -235,7 +252,13 @@ window.AUTO = (() => {
         if (!holdSince) holdSince = now;
         if (now - holdSince > 30000) {
           $('autoMsg').textContent = `투입 준비 완료 (BT ${st.bt}°). 레버로 생두를 넣으세요. 투입은 자동으로 알아채요`;
-          if (!readyRung) { readyRung = true; ALARM.ring('투입 준비 완료. 생두를 넣으세요', 4); }
+          if (!readyRung) { readyRung = true; lastReadyRing = now; ALARM.ring('투입 준비 완료. 생두를 넣으세요', 4); }
+          // 기다리는 동안 2분 30초마다 다시 알림 (15분이 지나면 위 안전장치가 예열을 끈다)
+          else if (now - lastReadyRing > 150000) {
+            lastReadyRing = now;
+            const left = Math.max(1, Math.round(15 - (now - holdSince) / 60000));
+            ALARM.ring(`투입 준비돼 있어요. ${left}분 안에 넣지 않으면 예열을 꺼요`, 2);
+          }
         }
       } else holdSince = 0;
       return;

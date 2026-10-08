@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>부자 AI 로스팅</title>
-<link rel="stylesheet" href="style.css?v=26">
+<link rel="stylesheet" href="style.css?v=28">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -228,7 +228,8 @@ function handle(p) {
     const d = p.slice(1);
     let t1 = (d[1] << 8) | d[2], t2 = (d[3] << 8) | d[4];
     if (swapped) [t1, t2] = [t2, t1];
-    const st = { mode: d[0], bt: t1, et: t2, burner: d[5], fan: d[7], drop: d[8], target: (d[11] << 8) | d[12] };
+    // 자리 (2026-10-08 두 번째 스누프로 바로잡음): 7 쿨링, 8 로스터 알람(예열 완료·부저), 9 배출구, 12-13 예열 목표
+    const st = { mode: d[0], bt: t1, et: t2, burner: d[5], fan: d[7], alarm: d[8], drop: d[9], target: (d[12] << 8) | d[13] };
     addSample(st);
     if (window.CONTROL) CONTROL.onStatus(st);
   } else if (p[0] === 0x61) log('로스터 응답: 연결 확인');
@@ -475,9 +476,9 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=24"></script>
-<script src="control.js?v=17"></script>
-<script src="auto.js?v=27"></script>
+<script src="ai.js?v=29"></script>
+<script src="control.js?v=29"></script>
+<script src="auto.js?v=30"></script>
 <script src="ui.js?v=27"></script>
 </body>
 </html>

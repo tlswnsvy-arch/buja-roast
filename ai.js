@@ -461,6 +461,7 @@ $('beanPick').onchange = () => {
   const b = v[0] === 's' ? saved[+v.slice(1)] : fromHist[+v.slice(1)];
   for (const [k, id] of Object.entries(BEAN_FIELDS)) if (b[k] != null && b[k] !== '') { $(id).value = b[k]; store.set('bean_' + id, b[k]); }
   if (b.process && !PROCESSES.includes(b.process)) $('bProcess').value = '기타';
+  if (window.renderTasteChips) renderTasteChips();
   const prof = store.get('beanProfiles', {})[b.name];
   if (prof) { lastRec = prof; store.set('lastRec', prof); renderRec(); log('이 생두의 지난 프로파일을 불러왔어요'); }
   syncChips();
@@ -515,24 +516,65 @@ $('beanPhoto').onchange = async e => {
 };
 
 // 맛 키워드: 눌러서 넣고 빼기
-const TASTES = ['꽃향', '자스민', '과일향', '베리', '시트러스', '열대과일', '와인', '초콜릿', '카카오', '견과', '캐러멜', '꿀', '단맛 많이', '산미 밝게', '산미 부드럽게', '바디 가볍게', '바디 묵직', '크리미', '깔끔한 후미', '쓴맛 적게'];
+// 원하는 맛 버튼: 기본은 '꽃향' 하나, 나머지는 사용자가 추가한 단어 (이 기기에 기억)
+// 고른 맛은 생두 정보(beans[].taste)와 함께 저장돼서, 생두를 고르면 그때 고른 맛이 그대로 켜진다
+let tasteEditing = false;
+const tasteWords = () => store.get('tasteWords', ['꽃향']);
+const splitTaste = t => String(t || '').split(/,\s*/).map(x => x.trim()).filter(Boolean);
 function syncChips() {
-  const cur = $v('bTaste');
-  document.querySelectorAll('#tasteChips .chip').forEach(c => c.classList.toggle('on', cur.split(/,\s*/).includes(c.textContent)));
+  const cur = splitTaste($v('bTaste'));
+  document.querySelectorAll('#tasteChips .chip.word').forEach(c => c.classList.toggle('on', cur.includes(c.dataset.w)));
 }
-$('tasteChips').innerHTML = TASTES.map(t => `<span class="chip">${t}</span>`).join('');
-$('tasteChips').onclick = e => {
-  if (!e.target.classList.contains('chip')) return;
-  const t = e.target.textContent, list = $v('bTaste').split(/,\s*/).filter(Boolean);
-  const i = list.indexOf(t); i >= 0 ? list.splice(i, 1) : list.push(t);
+function renderTasteChips() {
+  // 저장된 단어 + 지금 생두에 적혀 있는 짧은 단어(다른 기기·예전 입력)도 버튼으로 보여준다
+  const words = [...tasteWords()];
+  for (const w of splitTaste($v('bTaste'))) if (w.length <= 12 && !words.includes(w)) words.push(w);
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  $('tasteChips').classList.toggle('editing', tasteEditing);
+  $('tasteChips').innerHTML = words.map(w => `<span class="chip word" data-w="${esc(w)}">${esc(w)}</span>`).join('') +
+    (tasteEditing ? '<span class="chip done">완료</span>' : '<span class="chip add">+ 추가</span>') +
+    '<span id="tasteAdd" hidden><input id="tasteNew" placeholder="예: 복숭아"><button id="tasteOk">추가</button></span>';
+  syncChips();
+}
+window.renderTasteChips = renderTasteChips;
+function addTasteWord(w) {
+  w = w.trim(); if (!w) return;
+  const list = tasteWords(); if (!list.includes(w)) { list.push(w); store.set('tasteWords', list); }
+  const cur = splitTaste($v('bTaste')); if (!cur.includes(w)) cur.push(w);
+  $('bTaste').value = cur.join(', '); store.set('bean_bTaste', $('bTaste').value);
+  renderTasteChips();
+}
+function removeTasteWord(w) {
+  store.set('tasteWords', tasteWords().filter(x => x !== w));
+  $('bTaste').value = splitTaste($v('bTaste')).filter(x => x !== w).join(', '); store.set('bean_bTaste', $('bTaste').value);
+  renderTasteChips();
+}
+$('tasteChips').addEventListener('click', e => {
+  const t = e.target;
+  if (t.classList.contains('add')) { $('tasteAdd').hidden = false; t.hidden = true; $('tasteNew').focus(); return; }
+  if (t.id === 'tasteOk') { addTasteWord($v('tasteNew')); return; }
+  if (t.classList.contains('done')) { tasteEditing = false; renderTasteChips(); return; }
+  if (!t.classList.contains('word')) return;
+  if (tasteEditing) return removeTasteWord(t.dataset.w);
+  const w = t.dataset.w, list = splitTaste($v('bTaste'));
+  const i = list.indexOf(w); i >= 0 ? list.splice(i, 1) : list.push(w);
   $('bTaste').value = list.join(', '); store.set('bean_bTaste', $('bTaste').value); syncChips();
-};
+});
+$('tasteChips').addEventListener('keydown', e => { if (e.target.id === 'tasteNew' && e.key === 'Enter') addTasteWord($v('tasteNew')); });
+// 길게 누르면(0.6초) 지우기 모드: 버튼에 ✕가 붙고, 누르면 지워져요
+let pressTimer = null;
+$('tasteChips').addEventListener('pointerdown', e => {
+  if (!e.target.classList.contains('word')) return;
+  pressTimer = setTimeout(() => { tasteEditing = true; renderTasteChips(); }, 600);
+});
+['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('tasteChips').addEventListener(ev, () => clearTimeout(pressTimer)));
 $('bTaste').addEventListener('input', syncChips);
+
 
 const _histChange = $('histFile').onchange;
 $('histFile').onchange = async e => { await _histChange(e); renderBeans(); };
 $('reviewLast').onclick = () => { const all = store.get('myRoasts', []); if (!all.length) return ($('review').textContent = '저장된 배치가 없어요'); review(all.at(-1)); };
 renderBeans();
-syncChips();
+renderTasteChips();
 renderRec();
 loadWeather();
