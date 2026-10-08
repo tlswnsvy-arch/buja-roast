@@ -85,6 +85,18 @@
         <span class="note" style="width:60px;margin-left:12px">배출구</span><button data-drop="1">열기</button><button data-drop="0">닫기</button>
       </div>
       <div id="ctlMsg" class="note"></div>
+      <div style="border-top:1px solid var(--line);padding-top:10px;display:grid;gap:8px">
+        <div style="background:#5a1d1d;color:#ffd0d0;border-radius:10px;padding:12px;font-size:15px;line-height:1.5">
+          ⚠ AI 완전 자동: 화면이 스스로 히터를 켜고 바꾸고 배출까지 해요. 끝날 때까지 반드시 로스터 옆에 계세요.
+          자리를 비우지 말고, 이상한 소리·냄새·연기가 나면 바로 "전체 정지", 안 되면 로스터 전원을 끄세요.
+          태블릿 화면을 끄거나 다른 앱으로 가면 안전을 위해 버너가 꺼져요.
+        </div>
+        <div class="row">
+          <label style="display:flex;align-items:center;gap:8px;color:var(--text)"><input type="checkbox" id="autoAck" style="width:22px;height:22px"> 끝날 때까지 옆에서 지켜볼게요</label>
+          <button id="autoStart" style="background:#2e7d32;border-color:#2e7d32;font-weight:700">AI 자동 로스팅 시작</button>
+        </div>
+        <div id="autoMsg" style="font-size:16px"></div>
+      </div>
     </div>
   </section>
   <div class="row" id="damperRow">
@@ -93,6 +105,7 @@
     <input id="damperIn" type="number" min="0" max="100" step="5" style="width:80px" placeholder="%">
     <span id="damperNow" class="chip">댐퍼 100%</span>
   </div>
+  <div id="autoBanner" style="display:none;background:#c62828;color:#fff;font-weight:700;padding:10px 14px;border-radius:10px">AI 자동 로스팅 중 · 로스터 옆을 떠나지 마세요 · 문제가 있으면 전체 정지</div>
   <div id="coach"></div>
   <canvas id="chart"></canvas>
   <div class="row">
@@ -250,7 +263,7 @@ function autoDetect(st) {
   const s = samples.at(-1), back = samples.find(x => x.t >= s.t - 6);
   if (!back) return;
   const drop6 = back.bt - s.bt;
-  if (chargeAt == null && back.bt >= 120 && drop6 >= 8) {
+  if (chargeAt == null && back.bt >= 120 && drop6 >= 15) {
     // 급락 직전 최고점을 투입 시점으로
     const peak = samples.filter(x => x.t >= s.t - 8).reduce((a, b) => b.bt >= a.bt ? b : a);
     mark('투입', peak); log('투입 자동 감지'); return;
@@ -370,7 +383,8 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=8"></script>
-<script src="control.js?v=8"></script>
+<script src="ai.js?v=9"></script>
+<script src="control.js?v=9"></script>
+<script src="auto.js?v=9"></script>
 </body>
 </html>

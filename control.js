@@ -27,6 +27,7 @@ window.CONTROL = (() => {
   const msg = t => { $('ctlMsg').textContent = t; log('제어: ' + t); };
 
   async function stopAll(reason) {
+    if (window.AUTO) AUTO.cancel(reason);     // 자동 실행 중이면 먼저 멈춘다
     if (stopping || !chr) return;
     stopping = true;
     const was = enabled; enabled = true;     // 정지는 제어 모드가 꺼져 있어도 보낸다
@@ -55,7 +56,8 @@ window.CONTROL = (() => {
       const [k, v] = Object.entries(wanted)[0];
       if (st[k] === v) { msg(`로스터가 확인했어요: ${{ burner: '버너 ' + v + '%', fan: '쿨링 ' + (v ? '켜짐' : '꺼짐'), drop: '배출구 ' + (v ? '열림' : '닫힘') }[k]}`); wanted = null; }
     }
-    if (st.burner > 0 && (st.bt >= LIMIT_BT || st.et >= LIMIT_ET)) stopAll(`온도 한계 BT ${st.bt}° / ET ${st.et}°`);
+    if (st.burner > 0 && (st.bt >= LIMIT_BT || st.et >= LIMIT_ET)) return stopAll(`온도 한계 BT ${st.bt}° / ET ${st.et}°`);
+    if (window.AUTO) AUTO.tick(st);   // 완전 자동 (사용자 허락 2026-10-08, 옆에 있을 때만)
   }
 
   // 상태가 끊기면 경고하고 버너 0 시도
@@ -92,5 +94,5 @@ window.CONTROL = (() => {
   document.querySelectorAll('[data-fan]').forEach(b => twoTap(b, () => cmd('fan', +b.dataset.fan)));
   document.querySelectorAll('[data-drop]').forEach(b => twoTap(b, () => cmd('drop', +b.dataset.drop)));
 
-  return { allows, onStatus, stopAll, get enabled() { return enabled; } };
+  return { allows, onStatus, stopAll, cmd, get enabled() { return enabled; }, get last() { return last; } };
 })();
