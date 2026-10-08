@@ -20,7 +20,7 @@ window.ALARM = (() => {
   }
   function speak(text) { try { const u = new SpeechSynthesisUtterance(text); u.lang = 'ko-KR'; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch {} }
   const ring = (text, times = 3) => { beep(times); setTimeout(() => speak(text), times * 350 + 100); };
-  return { unlock, ring, beep };
+  return { unlock, ring, beep, speak };
 })();
 
 window.AUTO = (() => {
@@ -34,6 +34,7 @@ window.AUTO = (() => {
     burnerNow = v; lastSet = Date.now();
     await CONTROL.cmd('burner', v);
     say(`버너 ${v}% · ${why}`);
+    if ($('voiceOn')?.checked && phase === 'roast') ALARM.speak(`버너 ${v}퍼센트`);
   }
 
   async function begin(m, preheatTo, resuming = false) {

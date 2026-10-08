@@ -171,7 +171,7 @@ function renderRec() {
   // 읽기 쉽게: 요약 → 설정값(가장 중요) → 예상 → 접을 수 있는 설명 상자들
   $('rec').innerHTML = `
     <div class="recsec">
-      <div class="rech">요약</div>
+      <div class="row"><div class="rech" style="flex:1">요약</div><button id="readRec">🔊 읽어주기</button></div>
       <div>${esc(r.summary)}</div>
       ${r.level ? `<div class="recline"><b>배전도</b> ${esc(r.level)}${r.levelWhy ? `<div class="note">${esc(r.levelWhy)}</div>` : ''}</div>` : ''}
       ${r.speed ? `<div class="steps"><span class="step">${esc(r.type)}</span><span class="step">속도 ${esc(r.speed)}</span><span class="step">DT ${esc(r.dtSec)}초</span><span class="step">1차 크랙 뒤 +${esc(r.rise)}도</span></div>` : ''}
@@ -198,6 +198,14 @@ function renderRec() {
     <details class="recsec" open><summary class="rech">볶는 중 볼 것</summary>${list(r.watch)}</details>
     ${r.nextTry ? `<div class="recsec"><div class="rech">다음 배치 실험</div><div>${esc(r.nextTry)}</div></div>` : ''}`;
   $('undoRec').onclick = undoRec;
+  $('readRec').onclick = () => {
+    ALARM.unlock();
+    const steps = (r.steps || []).map(s => `원두 ${s.bt}도에서 버너 ${s.burner}퍼센트`).join(', ');
+    const parts = [r.summary, r.level && `배전도는 ${r.level}.`,
+      `투입 ${r.charge}도, 시작 버너 ${r.startBurner ?? 100}퍼센트. ${steps}. 1차 크랙 뒤 ${r.rise ?? 8}도 올리고, 디벨롭 ${r.dtSec ?? 60}초.`,
+      r.watch?.length && '볶는 중 볼 것. ' + r.watch.join('. ') + '.', r.nextTry && '다음 배치 실험. ' + r.nextTry];
+    ALARM.speak(parts.filter(Boolean).join(' '));
+  };
   $('rec').querySelectorAll('.recnum').forEach(inp => inp.addEventListener('change', () => {
     const k = inp.dataset.k, v = +inp.value; if (!isFinite(v)) return;
     pushHistory('숫자 고침');
@@ -255,12 +263,13 @@ JSON으로만: {"good":["잘된 점 1~2개"],"bad":["아쉬운 점 1~2개"],"cha
 patch에 쓸 수 있는 키: charge, startBurner, steps(전체 배열 [{bt,burner}]), drop, rise, dtSec. 숫자로.` }] }], { json: true, system: SYSTEM });
     const esc = t => String(t ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const li = arr => '<ul>' + (arr || []).map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
-    box.innerHTML = `<div class="recsec"><div class="rech">이번 배치 리뷰</div>
+    box.innerHTML = `<div class="recsec"><div class="row"><div class="rech" style="flex:1">이번 배치 리뷰</div><button id="readReview">🔊 읽어주기</button></div>
       <div><b>잘된 점</b>${li(r.good)}</div>
       <div><b>아쉬운 점</b>${li(r.bad)}</div></div>
       <div class="recsec"><div class="rech">다음 배치에 반영할 것</div>
       <div class="note">하나만 고르는 걸 추천해요. 잘못 눌렀으면 다시 누르면 취소돼요.</div>
       ${(r.changes || []).map((c, i) => `<div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;padding:6px 0;border-top:1px solid var(--line)"><button data-apply="${i}">적용</button><div><div>${esc(c.label)}</div><div class="note">${esc(c.why)}</div></div></div>`).join('')}</div>`;
+    $('readReview').onclick = () => { ALARM.unlock(); ALARM.speak(['잘된 점. ' + (r.good || []).join('. '), '아쉬운 점. ' + (r.bad || []).join('. '), '다음 배치 선택지. ' + (r.changes || []).map((c, i) => (i + 1) + '번, ' + c.label).join('. ')].join(' ')); };
     // 적용 ↔ 취소: 다시 누르면 그 변경이 바꾼 값만 원래대로
     box.querySelectorAll('[data-apply]').forEach(b => {
       let before = null;
@@ -329,7 +338,14 @@ async function ask(q) {
 
 // ---------- 로스팅 중 안내 (로컬 규칙 + 중요한 순간에만 AI) ----------
 let saidStep = -1, lastCoach = 0;
-function coach(text) { const c = $('coach'); c.style.display = 'block'; c.textContent = text; }
+let lastSpoken = '', lastSpokenAt = 0;
+function coach(text) {
+  const c = $('coach'); c.style.display = 'block'; c.textContent = text;
+  if (!$('voiceOn')?.checked || !window.ALARM) return;
+  const line = text.split('\n')[0];
+  if (line === lastSpoken && Date.now() - lastSpokenAt < 30000) return;
+  lastSpoken = line; lastSpokenAt = Date.now(); ALARM.speak(line.replace(/°C?/g, '도').replace(/%/g, '퍼센트'));
+}
 
 window.onSample = st => {
   if (chargeAt == null || events['배출']) return;

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>부자 AI 로스팅</title>
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -80,6 +80,7 @@
           <button id="preheatStart">예열만 시작</button>
           <span class="note" style="margin-left:12px">배출 뒤 쿨링</span>
           <select id="coolMin" style="width:auto"><option value="0">손으로 끄기</option><option value="3">3분 뒤 끄기</option><option value="4" selected>4분 뒤 끄기</option><option value="5">5분 뒤 끄기</option></select>
+          <label class="check" style="margin-left:12px"><input type="checkbox" id="voiceOn" checked> 🔊 볶는 중 음성 안내</label>
         </div>
         <details><summary>수동 조작 (버너·쿨링·배출구)</summary>
           <div class="note" style="margin:6px 0">두 번 눌러야 보내져요.</div>
@@ -442,9 +443,9 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=14"></script>
-<script src="control.js?v=14"></script>
-<script src="auto.js?v=14"></script>
-<script src="ui.js?v=14"></script>
+<script src="ai.js?v=15"></script>
+<script src="control.js?v=15"></script>
+<script src="auto.js?v=15"></script>
+<script src="ui.js?v=15"></script>
 </body>
 </html>
