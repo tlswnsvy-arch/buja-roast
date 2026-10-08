@@ -334,13 +334,37 @@ async function ask(q) {
     const refs = store.get('refProfiles', []);
     if (!refs.some(r => r.profile === link)) { refs.push({ profile: link, note: q.replace(/https?:\/\/\S+/g, '').trim(), at: new Date().toISOString().slice(0, 10) }); store.set('refProfiles', refs.slice(-30)); log('참고 프로파일로 저장'); }
   }
-  const ctx = `${beanText()}\n${wxText()}\n${liveText()}\n${lastRec ? '최근 AI 추천: ' + JSON.stringify({ charge: lastRec.charge, steps: lastRec.steps, drop: lastRec.drop, expected: lastRec.expected }) : ''}\n${link || ''}\n${refText()}\n사용자 기록(초보 기록, 기계 반응 확인용):\n${historyText(25)}`;
-  chatLog.push({ role: 'user', parts: [{ text: `${q}\n\n[참고 정보]\n${ctx}` }] });
+  const ctx = `${beanText()}\n${wxText()}\n${liveText()}\n${lastRec ? '지금 레시피: ' + JSON.stringify({ charge: lastRec.charge, startBurner: lastRec.startBurner, steps: lastRec.steps, drop: lastRec.drop, rise: lastRec.rise, dtSec: lastRec.dtSec }) : ''}\n${link || ''}\n${refText()}\n사용자 기록(초보 기록, 기계 반응 확인용):\n${historyText(25)}`;
+  chatLog.push({ role: 'user', parts: [{ text: `${q}\n\n[참고 정보]\n${ctx}\n\n[답하는 법] 레시피 숫자를 바꾸자고 제안할 때만 대답 맨 끝 줄에 '레시피변경: {"charge":숫자,"startBurner":숫자,"steps":[{"bt":숫자,"burner":숫자}],"drop":숫자,"rise":숫자,"dtSec":숫자}' 형식으로 바꿀 키만 적어라. 바꿀 게 없으면 그 줄을 쓰지 마라.` }] });
   const wait = addMsg('ai', '생각 중...');
   try {
     const a = await gemini(chatLog.slice(-12), { system: SYSTEM });
-    wait.textContent = a.trim();
+    // 끝 줄의 '레시피변경: {...}'을 떼어 내서 적용 버튼으로
+    const m = a.match(/레시피변경\s*:\s*(\{[\s\S]*\})\s*$/);
+    wait.textContent = (m ? a.slice(0, m.index) : a).trim();
     chatLog.push({ role: 'model', parts: [{ text: a }] });
+    if (m && lastRec) {
+      let p = null; try { p = JSON.parse(m[1]); } catch {}
+      const ok = {};
+      if (p) {
+        for (const k of ['charge', 'startBurner', 'drop', 'rise', 'dtSec']) if (p[k] != null && isFinite(+p[k])) ok[k] = +p[k];
+        if (Array.isArray(p.steps) && p.steps.length && p.steps.every(x => isFinite(+x.bt) && isFinite(+x.burner))) ok.steps = p.steps.map(x => ({ bt: +x.bt, burner: Math.max(0, Math.min(100, +x.burner)) }));
+      }
+      if (Object.keys(ok).length) {
+        const names = { charge: '투입', startBurner: '시작 버너', drop: '배출', rise: '상승폭', dtSec: 'DT' };
+        const desc = Object.entries(ok).map(([k, v]) => k === 'steps' ? '버너 단계 ' + v.map(x => x.bt + '°→' + x.burner + '%').join(', ') : names[k] + ' ' + v).join(' · ');
+        const row = document.createElement('div'); row.className = 'row';
+        const b = document.createElement('button'); b.textContent = '이대로 레시피에 적용'; b.className = 'go';
+        const note = document.createElement('span'); note.className = 'note'; note.textContent = desc;
+        let before = null;
+        b.onclick = () => {
+          if (before) { Object.assign(lastRec, before); before = null; b.textContent = '이대로 레시피에 적용'; }
+          else { pushHistory('AI 질문 적용'); before = JSON.parse(JSON.stringify(Object.fromEntries(Object.keys(ok).map(k => [k, lastRec[k]])))); Object.assign(lastRec, JSON.parse(JSON.stringify(ok)), { edited: true }); b.textContent = '적용됨 · 다시 누르면 취소'; }
+          store.set('lastRec', lastRec); saveBeanProfile(); renderRec(); log('AI 질문 → 레시피: ' + desc);
+        };
+        row.append(b, note); $('chat').appendChild(row); $('chat').scrollTop = 1e9;
+      }
+    }
   } catch (e) { wait.textContent = '실패: ' + e.message; chatLog.pop(); }
 }
 

@@ -213,7 +213,7 @@ window.AUTO = (() => {
     if (!coolSaid && hot < COOL_OFF) {
       coolSaid = true;
       $('phase').textContent = `${hot}° · 이제 기계를 꺼도 돼요`;
-      ALARM.ring(`${COOL_OFF}도 아래로 내려왔어요. 이제 기계를 꺼도 돼요`, 3);
+      ALARM.ring(`${COOL_OFF}도 아래로 내려왔어요. 이제 기계를 꺼도 돼요. 채프통도 확인해 주세요`, 3);
     }
   }
 
@@ -328,6 +328,7 @@ window.AUTO = (() => {
   $('nextBatch').addEventListener('click', () => {
     if (!CONTROL.enabled) { $('nextBatch').hidden = true; return say('"로스터 옆에 있어요"를 체크한 뒤 다시 시작하세요'); }
     if (!newBatch()) return;
+    ALARM.speak('다음 배치를 시작해요. 채프통이 차 있지 않은지 확인해 주세요');
     $('autoAck').checked = true; start();
   });
   $('preheatStart').addEventListener('click', preheatOnly);
