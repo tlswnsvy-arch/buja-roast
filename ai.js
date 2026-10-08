@@ -157,6 +157,7 @@ JSON으로만 답해라:
     renderRec();
   } catch (e) { $('rec').textContent = '추천 실패: ' + e.message; }
   btn.disabled = false;
+  tasteState();
 }
 
 const readBean = () => ({ name: $v('bName'), origin: $v('bOrigin'), process: $v('bProcess'), moist: $v('bMoist'), amt: $v('bAmt'), level: $v('bLevel'), brew: $v('bBrew'), taste: $v('bTaste'), prio: $v('bPrio') });
@@ -748,11 +749,36 @@ function syncChips() {
   if (!words.includes($v('bPrio'))) { $('bPrio').value = ''; store.set('bean_bPrio', ''); }
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   $('prioRow').hidden = words.length < 2;
-  $('prioRow').innerHTML = `<span class="note">⭐ 가장 중요한 맛 (하나만)</span>` + words.map(w => `<button class="pr${$v('bPrio') === w ? ' on' : ''}" data-w="${esc(w)}">${$v('bPrio') === w ? '⭐ ' : ''}${esc(w)}</button>`).join('');
+  $('prioRow').innerHTML = `<span class="note">⭐ 가장 중요한 맛 (하나만 · 누르기만 해서는 레시피가 안 바뀌어요)</span>` + words.map(w => `<button class="pr${$v('bPrio') === w ? ' on' : ''}" data-w="${esc(w)}">${$v('bPrio') === w ? '⭐ ' : ''}${esc(w)}</button>`).join('');
   $('prioRow').querySelectorAll('.pr').forEach(b => b.onclick = () => {
     const w = b.dataset.w; $('bPrio').value = $v('bPrio') === w ? '' : w; store.set('bean_bPrio', $v('bPrio')); syncChips();
   });
+  tasteState();
 }
+
+// 지금 레시피가 어떤 맛 기준으로 만들어졌는지 늘 보여준다 (맛을 바꿔도 추천을 다시 받기 전에는 레시피가 그대로라서 헷갈리지 않게)
+function tasteState() {
+  const box = $('tasteState'), btn = $('recBtn'); if (!box || !btn) return;
+  const words = t => splitTaste(t).filter(w => w.length <= 12);
+  const esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const r = lastRec, base = r?.bean;
+  if (!r?.charge) { box.innerHTML = ''; if (!btn.disabled) btn.textContent = 'AI 프로파일 추천받기'; return; }
+  const was = words(base?.taste || ''), now = words($v('bTaste')), wasP = base?.prio || '', nowP = $v('bPrio');
+  const added = now.filter(w => !was.includes(w)), removed = was.filter(w => !now.includes(w));
+  const same = !added.length && !removed.length && wasP === nowP;
+  if (same) {
+    box.innerHTML = `<div class="ts ok">✓ 지금 레시피는 이 맛 기준으로 만들었어요${nowP ? ` (⭐ ${esc(nowP)})` : ''}. 그대로 볶으면 돼요.</div>`;
+    if (!btn.disabled) btn.textContent = '새 레시피 다시 받기';
+  } else {
+    const parts = [];
+    if (added.length) parts.push(`추가한 맛: ${added.map(esc).join(', ')}`);
+    if (removed.length) parts.push(`뺀 맛: ${removed.map(esc).join(', ')}`);
+    if (wasP !== nowP) parts.push(nowP ? `⭐ 가장 중요한 맛: ${esc(nowP)}` : '⭐ 가장 중요한 맛을 지움');
+    box.innerHTML = `<div class="ts warn"><b>바꾼 맛은 아직 레시피에 반영 안 됐어요.</b><br>${parts.join(' · ')}<br>반영하려면 아래 "바꾼 맛으로 새 레시피 받기"를 누르세요. 안 누르면 지금 레시피 그대로 볶아요.</div>`;
+    if (!btn.disabled) btn.textContent = '바꾼 맛으로 새 레시피 받기';
+  }
+}
+window.tasteState = tasteState;
 function renderTasteChips() {
   // 저장된 단어 + 지금 생두에 적혀 있는 짧은 단어(다른 기기·예전 입력)도 버튼으로 보여준다
   const words = [...tasteWords()];

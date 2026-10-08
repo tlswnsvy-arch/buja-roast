@@ -23,7 +23,7 @@
     $('toRecipe').onclick = e => { e.preventDefault(); show('recipe'); };
   }
   const origRender = window.renderRec;
-  window.renderRec = function () { origRender(); recipeLine(); };
+  window.renderRec = function () { origRender(); recipeLine(); window.tasteState?.(); };
   $('bName').addEventListener('change', recipeLine);
   $('bAmt').addEventListener('change', recipeLine);
 

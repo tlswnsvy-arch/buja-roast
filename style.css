@@ -242,3 +242,9 @@ button.go { background:linear-gradient(180deg, #3a9a4a, #2b7d39); border-color:#
 #cupForm .gb.on.g1 { background:rgba(255,216,138,.18); border-color:var(--gold); color:var(--gold); }
 #cupForm .gb.on.g2 { background:rgba(255,82,82,.18); border-color:#ff5252; color:#ffc9c4; }
 #cupForm .gb.on.g3 { background:rgba(255,255,255,.08); border-color:var(--dim); }
+
+/* 지금 레시피가 어떤 맛 기준인지 */
+#tasteState .ts { margin-top:4px; padding:10px 12px; border-radius:10px; font-size:14.5px; line-height:1.6; }
+#tasteState .ts.ok { color:#9fe7b8; background:rgba(60,207,122,.08); border:1px solid rgba(60,207,122,.35); }
+#tasteState .ts.warn { color:#ffe2a8; background:rgba(255,216,138,.10); border:1px solid rgba(255,216,138,.45); }
+#tasteState .ts.warn b { color:var(--gold); }
