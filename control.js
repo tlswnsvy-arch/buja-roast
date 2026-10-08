@@ -97,8 +97,8 @@ window.CONTROL = (() => {
   $('ctlOn').addEventListener('change', e => {
     enabled = e.target.checked;
     $('ctlBody').style.display = enabled ? 'grid' : 'none';
-    $('modeTag').textContent = enabled ? '(제어 모드)' : '(읽기 전용)';
-    $('modeTag').style.color = enabled ? '#ff8a65' : '';
+    $('modeTag').textContent = enabled ? '제어 모드' : '읽기 전용';
+    $('modeTag').style.color = enabled ? '#ff8a65' : ''; $('modeTag').style.borderColor = enabled ? '#ff8a65' : '';
     msg(enabled ? '제어 켜짐. 로스터 옆을 떠나지 마세요' : '제어 꺼짐 (로스터 상태는 그대로예요)');
   });
   $('stopAll').addEventListener('click', () => stopAll('정지 버튼'));

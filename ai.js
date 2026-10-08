@@ -110,7 +110,7 @@ function historyText(limit = 40) {
   if (!h.length) return '(불러온 개별 기록 없음)';
   const f = s => s == null ? '' : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   return h.slice(-limit).map(r => {
-    if (r.source === 'web') return `${r.date} ${r.bean?.name || ''} ${r.bean?.amt || ''}g 투입${r.charge} 1C ${r.fc || '-'} 배출 ${r.drop || '-'} DTR ${r.dtr ?? '-'} 평가:${r.cupping || '-'}`;
+    if (r.source === 'web') return `${r.date} ${r.bean?.name || ''} ${r.bean?.amt || ''}g 투입${r.charge} 1C ${r.fc || '-'} 배출 ${r.drop || '-'} DTR ${r.dtr ?? '-'} 평가:${[window.CUP?.text(r), r.cupping].filter(Boolean).join(' / ') || '-'}`;
     const ev = r.ev || {};
     return `${(r.date || '').slice(0, 10)} ${/^# \d+$/.test(r.name) ? '' : r.name} ${r.amt ? r.amt + 'g ' : ''}${r.mode} 투입${r.charge} TP ${ev.TP ? ev.TP.t + '@' + f(ev.TP.s) : '-'} 1C ${ev['1C'] ? ev['1C'].t + '@' + f(ev['1C'].s) : '-'} 배출 ${ev['배출'] ? ev['배출'].t + '@' + f(ev['배출'].s) : r.drop} DTR ${r.dtr ?? '-'} ${r.steps?.length ? '단계 ' + r.steps.map(s => s[0] + '→' + s[1] + '%').join(',') : ''} ${r.memo ? '메모:' + r.memo.replace(/\n/g, ' ') : ''}`;
   }).join('\n');
@@ -341,7 +341,7 @@ async function review(rec) {
 ${pvaText}
 실제 결과: 투입 ${rec.charge}°C, 1차 크랙 ${rec.fc || '-'}, 배출 ${rec.drop}, DTR ${rec.dtr}%, 댐퍼 기록 ${JSON.stringify(rec.damperLog || [])}
 곡선 요약[투입 뒤 초, BT, ET, 버너%, 댐퍼(값/10 = 칸)]: ${JSON.stringify(rec.curve.filter(c => c[0] >= -10).filter((_, i) => i % 2 === 0))}
-${$v('cupNote') ? '사용자 맛 평가: ' + $v('cupNote') : '아직 맛 평가 없음'}
+${(() => { const t = [window.CUP?.text(rec), $v('cupNote') || rec.cupping].filter(Boolean).join(' / '); return t ? '사용자 맛 평가: ' + t : '아직 맛 평가 없음'; })()}
 결과를 추천과 비교하고, 예상과 어긋난 곳이 있으면 왜 그랬는지(기계 반응, 예열 상태, 생두 특성, 날씨, 사람이 누른 시점 등) 곡선 근거를 들어 설명해라. 다음 배치에서 바꿀 것을 1~3개 골라라. 한 번에 하나씩 바꾸는 원칙을 지키되, 서로 다른 선택지로 줘라(사용자가 하나를 고른다).
 JSON으로만: {"deviation":["예상과 달랐던 점과 이유 1~3개 (같았으면 '예상대로 진행'이라고)"],"good":["잘된 점 1~2개"],"bad":["아쉬운 점 1~2개"],"changes":[{"label":"버튼에 쓸 짧은 문장","why":"이유 한 줄","patch":{"바꿀 키만":"값"}}]}
 patch에 쓸 수 있는 키: charge, startBurner, steps(전체 배열 [{bt,burner}]), drop, rise, dtSec. 숫자로.` }] }], { json: true, system: SYSTEM });
@@ -559,23 +559,44 @@ function beanList() {
     .map(guessBean);
   return { saved, fromHist };
 }
+// 내 생두 목록: 버튼을 누르면 펼쳐지고, 예전 로스팅 기록은 접힌 폴더 안에
+let pickedBean = '';   // 's3' 저장한 생두, 'h2' 예전 기록
 function renderBeans() {
-  const { saved, fromHist } = beanList(), sel = $('beanPick'), profs = store.get('beanProfiles', {});
-  sel.innerHTML = '<option value="">내 생두에서 고르기</option>' +
-    (saved.length ? `<optgroup label="저장한 생두 (최근 순)">${saved.map((b, i) => [b, i]).sort((x, y) => (y[0].usedAt || '').localeCompare(x[0].usedAt || '')).map(([b, i]) => `<option value="s${i}">${b.name}${b.usedAt ? ' · ' + b.usedAt.slice(5).replace('-', '/') : ''}${profs[b.name] ? ' · 설정 있음' : ''}</option>`).join('')}</optgroup>` : '') +
-    (fromHist.length ? `<optgroup label="예전 로스팅 기록에서">${fromHist.map((b, i) => `<option value="h${i}">${b.name}</option>`).join('')}</optgroup>` : '');
+  const { saved, fromHist } = beanList(), profs = store.get('beanProfiles', {});
+  const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const rows = saved.map((b, i) => [b, i]).sort((x, y) => (y[0].usedAt || '').localeCompare(x[0].usedAt || ''))
+    .map(([b, i]) => `<button class="beanrow ${pickedBean === 's' + i ? 'on' : ''}" data-v="s${i}"><span>${esc(b.name)}</span><span class="note">${b.usedAt ? b.usedAt.slice(5).replace('-', '/') : ''}${profs[b.name] ? ' · 설정 있음' : ''}</span></button>`).join('');
+  $('beanPanel').innerHTML = (rows || '<div class="note">저장한 생두가 아직 없어요.</div>') +
+    (fromHist.length ? `<details class="beanfold"><summary>📁 예전 로스팅 기록에서 (${fromHist.length}개)</summary>${fromHist.map((b, i) => `<button class="beanrow" data-v="h${i}"><span>${esc(b.name)}</span></button>`).join('')}</details>` : '');
+  $('beanPanel').querySelectorAll('.beanrow').forEach(b => b.onclick = () => pickBean(b.dataset.v));
+  const cur = pickedBean[0] === 's' ? saved[+pickedBean.slice(1)] : null;
+  $('beanOpen').textContent = cur ? `🫘 ${cur.name} ▾` : '🫘 내 생두에서 고르기 ▾';
 }
-$('beanPick').onchange = () => {
-  const v = $('beanPick').value; if (!v) return;
+$('beanOpen').onclick = () => { $('beanPanel').hidden = !$('beanPanel').hidden; };
+// 생두 칸 비우기 (투입량·배전도·마시는 방법은 그대로). 레시피도 그 생두 것이 아니면 비운다
+function clearBean() {
+  for (const id of ['bName', 'bOrigin', 'bMoist', 'bTaste']) { $(id).value = ''; store.set('bean_' + id, ''); }
+  $('bProcess').value = '워시드'; store.set('bean_bProcess', '워시드');
+  lastRec = null; store.set('lastRec', null);
+  $('rec').innerHTML = '<div class="note">아직 추천이 없어요. 위에서 추천을 받으세요.</div>';
+  window.renderRec?.();
+  if (window.renderTasteChips) renderTasteChips();
+  syncChips();
+}
+$('beanNew').onclick = () => { pickedBean = ''; clearBean(); renderBeans(); $('beanPanel').hidden = true; $('bName').focus(); };
+function pickBean(v) {
   const { saved, fromHist } = beanList();
-  const b = v[0] === 's' ? saved[+v.slice(1)] : fromHist[+v.slice(1)];
+  const b = v[0] === 's' ? saved[+v.slice(1)] : fromHist[+v.slice(1)]; if (!b) return;
+  clearBean();   // 전에 적힌 값이 남지 않게 먼저 비운다
+  pickedBean = v;
   for (const [k, id] of Object.entries(BEAN_FIELDS)) if (b[k] != null && b[k] !== '') { $(id).value = b[k]; store.set('bean_' + id, b[k]); }
   if (b.process && !PROCESSES.includes(b.process)) $('bProcess').value = '기타';
   if (window.renderTasteChips) renderTasteChips();
   const prof = store.get('beanProfiles', {})[b.name];
   if (prof) { lastRec = prof; store.set('lastRec', prof); renderRec(); log('이 생두의 지난 프로파일을 불러왔어요'); }
   syncChips();
-};
+  renderBeans(); $('beanPanel').hidden = true;
+}
 // 생두 정보 저장 (추천받기·자동 로스팅 시작 때도 자동으로). 마지막 사용 날짜를 같이 남긴다
 function autoSaveBean(quiet) {
   autoName();
@@ -588,8 +609,10 @@ function autoSaveBean(quiet) {
 window.autoSaveBean = autoSaveBean;
 $('beanSave').onclick = () => { if (!autoSaveBean()) alertBox('생두 이름을 먼저 넣어주세요'); };
 $('beanDel').onclick = () => {
-  const v = $('beanPick').value; if (!v.startsWith('s')) return;
-  const saved = store.get('beans', []); saved.splice(+v.slice(1), 1); store.set('beans', saved); renderBeans();
+  const v = pickedBean; if (!v.startsWith('s')) return alertBox('지울 생두를 목록에서 먼저 고르세요');
+  const saved = store.get('beans', []), b = saved[+v.slice(1)];
+  if (!confirm(`"${b.name}" 생두를 목록에서 지울까요? (볶은 기록은 남아요)`)) return;
+  saved.splice(+v.slice(1), 1); store.set('beans', saved); pickedBean = ''; renderBeans();
 };
 const alertBox = t => { $('rec').style.whiteSpace = 'pre-wrap'; $('rec').textContent = t; };
 
@@ -605,8 +628,9 @@ async function imageToBase64(file) {
   c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', 0.85).split(',')[1];
 }
-$('beanPhoto').onchange = async e => {
+async function beanFromPhoto(e) {
   const f = e.target.files[0]; if (!f) return;
+  pickedBean = ''; clearBean(); renderBeans();
   alertBox('사진에서 생두 정보를 읽는 중...');
   try {
     const data = await imageToBase64(f);
@@ -620,10 +644,12 @@ $('beanPhoto').onchange = async e => {
     if (r.process) $('bProcess').value = PROCESSES.includes(r.process) ? r.process : '기타';
     if (r.moist) $('bMoist').value = String(r.moist).replace(/[^\d.]/g, '');
     Object.values(BEAN_FIELDS).forEach(id => store.set('bean_' + id, $(id).value));
-    alertBox(`사진에서 읽었어요: ${r.name || '-'} / ${r.origin || '-'} / ${r.process || '-'} / 수분 ${r.moist || '-'}${r.notes ? '\n참고: ' + r.notes : ''}\n맞으면 "이 생두 저장"을 눌러두세요.`);
+    alertBox(`사진에서 읽었어요: ${r.name || '-'} / ${r.origin || '-'} / ${r.process || '-'} / 수분 ${r.moist || '-'}${r.notes ? '\n참고: ' + r.notes : ''}\n맞으면 "저장"을 눌러 두세요.`);
   } catch (err) { alertBox('사진 읽기 실패: ' + err.message); }
   e.target.value = '';
-};
+}
+$('beanPhoto').onchange = beanFromPhoto;
+$('beanAlbum').onchange = beanFromPhoto;
 
 // 맛 키워드: 눌러서 넣고 빼기
 // 원하는 맛 버튼: 기본은 '꽃향' 하나, 나머지는 사용자가 추가한 단어 (이 기기에 기억)
@@ -688,3 +714,36 @@ renderBeans();
 renderTasteChips();
 renderRec();
 loadWeather();
+
+// ---------- 맛 평가 정리: 길게 막 적은 글을 항목별 한 줄로 (원문은 cuppingRaw에 보관) ----------
+async function tidyCup(text) {
+  const t = String(text || '').trim();
+  if (t.length < 15) return t;   // 짧으면 그대로
+  const out = await gemini([{ role: 'user', parts: [{ text: `커피 맛 평가 메모를 정리해줘.
+규칙: 사용자가 실제로 말한 것만 쓴다. 말하지 않은 항목은 빼고, 없는 맛을 지어내지 않는다.
+항목 순서: 향, 신맛, 단맛, 쓴맛, 무게감, 뒷맛, 총평. 각 항목은 말투를 빼고 짧은 명사형으로 다듬는다 (예: "거의 없었어" → "거의 없음", "가벼운거 같기도 하고" → "가벼운 편", "식으니까 더 달아짐" → "식으면서 단맛 올라옴").
+형식: "향: 딸기, 꽃 · 신맛: 상큼 · 단맛: 달다 · 총평: 맛있음" 처럼 한 줄. 다른 말은 쓰지 마.
+메모: ${t}` }] }]);
+  return out.trim().replace(/\*\*/g, '').split('\n')[0] || t;
+}
+// 마지막 배치(또는 i번째)의 맛 평가를 정리해 저장
+async function tidyCupSave(i) {
+  const all = store.get('myRoasts', []); if (!all.length) return null;
+  const k = i ?? all.length - 1, r = all[k];
+  const raw = r.cuppingRaw || r.cupping; if (!raw) return null;
+  const neat = await tidyCup(raw);
+  const fresh = store.get('myRoasts', []); fresh[k].cuppingRaw = raw; fresh[k].cupping = neat;
+  localStorage.setItem('myRoasts', JSON.stringify(fresh));
+  return neat;
+}
+$('tidyCup').onclick = async () => {
+  const b = $('tidyCup');
+  // 입력칸에 새로 적은 게 있으면 그걸 원문으로
+  const all = store.get('myRoasts', []); if (!all.length) return;
+  if ($v('cupNote')) { all.at(-1).cupping = $v('cupNote'); delete all.at(-1).cuppingRaw; localStorage.setItem('myRoasts', JSON.stringify(all)); }
+  b.disabled = true; b.textContent = '정리 중...';
+  try { const neat = await tidyCupSave(); if (neat) $('cupNote').value = neat; window.renderLog?.(); }
+  catch (e) { alert('정리 실패: ' + e.message); }
+  b.disabled = false; b.textContent = '✨ AI로 정리';
+};
+window.tidyCupSave = tidyCupSave;

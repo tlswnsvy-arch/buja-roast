@@ -4,16 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>부자 AI 로스팅</title>
-<link rel="stylesheet" href="style.css?v=28">
+<link rel="stylesheet" href="style.css?v=37">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#141416">
+<meta name="theme-color" content="#1c1d22">
 </head>
 <body>
 <div id="top">
   <header>
-    <div class="brand">☕ 부자 AI 로스팅 <span class="note" id="modeTag">(읽기 전용)</span></div>
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd88a"/><stop offset="1" stop-color="#e0904a"/></linearGradient></defs>
+        <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#lg)"/>
+        <ellipse cx="19" cy="21.5" rx="8.6" ry="11.2" transform="rotate(28 19 21.5)" fill="#2a1a12"/>
+        <path d="M14.5 12.5c4 3.2 1.2 8.2 5.2 10.6 3 1.8 2.2 5.6 0.6 8.4" fill="none" stroke="#e0904a" stroke-width="2" stroke-linecap="round"/>
+        <path d="M31 6.5l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9Z" fill="#2a1a12"/>
+      </svg>
+      <div class="wordmark"><div class="wm1">BUJA<span>AI</span></div><div class="wm2">ROASTING ASSISTANT</div></div>
+      <span class="modepill" id="modeTag">읽기 전용</span>
+    </div>
     <span id="state">연결 안 됨</span>
     <button class="main" id="connect">로스터 연결</button>
     <button id="muteBtn" title="음성 켜기/끄기">🔊</button>
@@ -36,11 +46,11 @@
   <button id="resumeBtn" style="display:none">화면을 벗어나서 버너를 껐어요 · 눌러서 자동 이어가기</button>
   <div id="coach"></div>
   <nav id="tabs">
-    <button data-tab="roast" class="on">🔥 로스팅</button>
-    <button data-tab="recipe">📝 레시피</button>
-    <button data-tab="log">📋 기록</button>
-    <button data-tab="chat">💬 AI 질문</button>
-    <button data-tab="settings">⚙ 설정</button>
+    <button data-tab="roast" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c.5 3.5 4.5 5.2 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2 1-3.3 2-4.3.2 1.6 1 2.6 2 2.8C11 8.6 11 5.5 12 3Z"/><path d="M5 21h14"/></svg><span>로스팅</span></button>
+    <button data-tab="recipe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9.5 12h6M9.5 16h4"/></svg><span>레시피</span></button>
+    <button data-tab="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg><span>기록</span></button>
+    <button data-tab="chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6Z"/><path d="M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7Z"/></svg><span>AI 질문</span></button>
+    <button data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>설정</span></button>
   </nav>
 </div>
 <main>
@@ -100,8 +110,14 @@
     <section class="card">
       <h2>1. 생두</h2>
       <div class="row">
-        <select id="beanPick" style="flex:1"><option value="">내 생두에서 고르기</option></select>
-        <label class="chip pick">📷 사진으로 채우기<input type="file" id="beanPhoto" accept="image/*" capture="environment" hidden></label>
+        <button id="beanOpen" style="flex:1;text-align:left">🫘 내 생두에서 고르기 ▾</button>
+        <button id="beanNew">＋ 새 생두</button>
+      </div>
+      <div id="beanPanel" class="beanpanel" hidden></div>
+      <div class="row">
+        <label class="chip pick">📷 사진 찍어 채우기<input type="file" id="beanPhoto" accept="image/*" capture="environment" hidden></label>
+        <label class="chip pick">🖼 앨범에서 채우기<input type="file" id="beanAlbum" accept="image/*" hidden></label>
+        <span style="flex:1"></span>
         <button id="beanSave">저장</button>
         <button id="beanDel">삭제</button>
       </div>
@@ -136,8 +152,10 @@
     </section>
     <section class="card">
       <h2>4. 볶은 뒤</h2>
-      <label>맛 평가 (마셔보고 적으면 다음 리뷰에 반영돼요)<input id="cupNote" placeholder="예: 산미 밝고 깔끔, 단맛 약함, 약간 곡물맛"></label>
-      <div class="row"><button id="reviewLast">마지막 배치 리뷰 받기</button></div>
+      <div class="note">맛 평가표 (누르면 바로 저장돼요. 다음 리뷰에 반영)</div>
+      <div id="cupForm"></div>
+      <label>하고 싶은 말 (자유롭게, 길어도 돼요)<input id="cupNote" placeholder="예: 산미 밝고 깔끔, 단맛 약함, 약간 곡물맛"></label>
+      <div class="row"><button id="tidyCup">✨ AI로 정리</button><button id="reviewLast">마지막 배치 리뷰 받기</button></div>
       <div id="review" style="display:grid;gap:8px;line-height:1.6"></div>
     </section>
   </section>
@@ -542,10 +560,11 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=41"></script>
-<script src="control.js?v=31"></script>
+<script src="ai.js?v=49"></script>
+<script src="control.js?v=32"></script>
 <script src="auto.js?v=42"></script>
-<script src="replay.js?v=41"></script>
-<script src="ui.js?v=41"></script>
+<script src="replay.js?v=43"></script>
+<script src="cupping.js?v=50"></script>
+<script src="ui.js?v=46"></script>
 </body>
 </html>

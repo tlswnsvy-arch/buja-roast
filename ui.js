@@ -6,6 +6,7 @@
     document.querySelectorAll('main > .tab').forEach(s => { s.hidden = s.id !== 'tab-' + name; });
     if (name === 'roast') draw();
     if (name === 'log') renderLog();
+    if (name === 'recipe') window.CUP?.render();
     try { localStorage.setItem('tab', name); } catch {}
     scrollTo({ top: 0 });
   };
@@ -41,7 +42,7 @@
       return `<tr><td>${when}</td><td>${esc(r.bean?.name || '-')}<div class="note">${esc(r.bean?.amt || '')}${r.bean?.amt ? 'g' : ''}</div></td>
         <td>${esc(r.charge ?? '-')}°</td><td>${fc ? `${fc.t}° ${r.fc.split('@')[1]}` : '-'}</td><td>${dr ? `${dr.t}° ${r.drop.split('@')[1]}` : '-'}</td>
         <td>${dt != null ? dt + '초' : '-'}<div class="note">${rise != null ? '+' + rise + '°' : ''}</div></td><td>${r.dtr ?? '-'}%</td>
-        <td class="cup">${esc(r.cupping || '')}<div><a href="#" data-cup="${i}" style="color:var(--et)">${r.cupping ? '고치기' : '맛 적기'}</a></div>${r.curve?.length ? `<div><a href="#" data-replay="${i}" style="color:var(--gold)">▶ 재생</a></div>` : ''}</td></tr>`;
+        <td class="cup">${r.cup?.total ? `<div style="color:var(--gold)">${'★'.repeat(r.cup.total)}</div>` : ''}${esc(r.cupping || '')}${r.cuppingRaw ? `<details class="note"><summary>원문</summary>${esc(r.cuppingRaw)}</details>` : ''}<div><a href="#" data-cup="${i}" style="color:var(--et)">${r.cupping ? '고치기' : '맛 적기'}</a></div>${r.curve?.length ? `<div><a href="#" data-replay="${i}" style="color:var(--gold)">▶ 재생</a></div>` : ''}</td></tr>`;
     }).reverse().join('');
     $('logTable').innerHTML = `<table class="logtbl"><tr><th>날짜</th><th>생두</th><th>투입</th><th>1차 크랙</th><th>배출</th><th>DT·상승</th><th>DTR</th><th>맛 평가</th></tr>${rows}</table>`;
     $('logTable').querySelectorAll('[data-replay]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); REPLAY.open(all[+a.dataset.replay]); }));
@@ -49,7 +50,9 @@
       e.preventDefault();
       const i = +a.dataset.cup, v = prompt('맛 평가', all[i].cupping || '');
       if (v == null) return;
-      all[i].cupping = v.trim(); localStorage.setItem('myRoasts', JSON.stringify(all)); renderLog();
+      all[i].cupping = v.trim(); delete all[i].cuppingRaw; localStorage.setItem('myRoasts', JSON.stringify(all)); renderLog();
+      // 길게 적었으면 AI가 항목별로 정리 (원문은 cuppingRaw에 남김)
+      if (v.trim().length >= 15) window.tidyCupSave?.(i).then(renderLog).catch(() => {});
     }));
   }
   window.renderLog = renderLog;
