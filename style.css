@@ -220,3 +220,25 @@ button.go { background:linear-gradient(180deg, #3a9a4a, #2b7d39); border-color:#
 .ver .vnow { color:#9fe7b8; font-weight:700; font-size:14px; }
 .ver .vback { padding:6px 12px; font-size:14px; }
 .ver .vdiff { margin-top:4px; color:#ffd88a; font-size:14px; }
+
+/* 가장 중요한 맛 */
+.prio { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:6px; }
+.prio[hidden] { display:none; }
+.prio .pr { padding:6px 12px; font-size:14px; border-radius:999px; }
+.prio .pr.on { background:rgba(255,216,138,.18); border-color:var(--gold); color:var(--gold); font-weight:700; }
+/* 마신 날 + 원했던 맛 체크 */
+#cupForm .drank { align-items:center; margin-top:8px; }
+#cupForm .dk { padding:8px 14px; font-size:14px; }
+#cupForm .dk.on { background:var(--et); border-color:var(--et); color:#111; }
+.dkdays { color:var(--dim); font-size:14px; }
+.dkdays b { color:var(--gold); }
+.goalbox { margin-top:10px; padding:12px; border-radius:12px; border:1px solid rgba(255,216,138,.35); background:rgba(255,216,138,.05); display:grid; gap:8px; }
+.goalscore { color:#9fe7b8; font-weight:700; font-size:14px; }
+.goalrow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.goalrow .gw { min-width:110px; font-weight:700; }
+.gbtns { display:flex; gap:6px; flex-wrap:wrap; }
+#cupForm .gb { padding:7px 12px; font-size:14px; box-shadow:none; }
+#cupForm .gb.on.g0 { background:rgba(60,207,122,.22); border-color:var(--ok); color:#c8f5d9; }
+#cupForm .gb.on.g1 { background:rgba(255,216,138,.18); border-color:var(--gold); color:var(--gold); }
+#cupForm .gb.on.g2 { background:rgba(255,82,82,.18); border-color:#ff5252; color:#ffc9c4; }
+#cupForm .gb.on.g3 { background:rgba(255,255,255,.08); border-color:var(--dim); }

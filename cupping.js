@@ -27,6 +27,20 @@ window.CUP = (() => {
     { k: '갈색', c: '#9a6a45', m: '캐러멜·초콜릿·견과, 고소하고 달콤함' },
     { k: '검정', c: '#2b2b2f', m: '다크초콜릿·탄맛·스모키, 쓰고 무거움' },
   ];
+  // 원했던 맛 체크: 볶을 때 골랐던 맛(r.bean.taste)과 가장 중요한 맛(r.bean.prio)
+  const GOAL = ['났어요', '조금', '안 났어요', '모르겠어요'];
+  const goalWords = r => String(r?.bean?.taste || '').split(/,\s*/).map(x => x.trim()).filter(w => w && w.length <= 12);
+  const dayOf = iso => { const d = new Date(iso); d.setHours(0, 0, 0, 0); return d; };
+  const restDays = (r, drank) => { if (!drank || !(r.ts || r.date)) return null; const roast = r.ts ? new Date(r.ts) : new Date((r.date || '').replace(' ', 'T') + 'Z'); return Math.round((dayOf(drank) - dayOf(roast)) / 86400000); };
+  const today = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+  // AI에 넘길 목표 맛 결과
+  function goalText(r) {
+    const c = r?.cup, words = goalWords(r); if (!words.length) return '';
+    const g = c?.goal || {}, prio = r.bean?.prio;
+    const lines = words.map(w => `${w}${w === prio ? '(가장 중요)' : ''}: ${g[w] || '아직 평가 안 함'}`);
+    const days = restDays(r, c?.drank);
+    return `원했던 맛과 결과: ${lines.join(', ')}${days != null ? ` / 마신 날: 볶은 지 ${days}일째` : ''}`;
+  }
   let idx = -1, cur = null, seenLen = 0;
   const open = { color: false, tag: false, help: false };   // 접힌 칸 중 펼친 것 (다시 그려도 유지)
   const all = () => { try { return JSON.parse(localStorage.getItem('myRoasts') || '[]'); } catch { return []; } };
@@ -70,6 +84,19 @@ window.CUP = (() => {
     const opts = a.map((r, i) => `<option value="${i}" ${i === idx ? 'selected' : ''}>${when(r)} ${r.bean?.name || '배치'}</option>`).reverse().join('');
     $('cupForm').innerHTML = `
       <div class="row"><select id="cupWhich" style="flex:1">${opts}</select><span id="cupSaved" class="note"></span></div>
+      ${(() => {
+        const r = a[idx], words = goalWords(r), prio = r.bean?.prio, g = cur.goal || {}, days = restDays(r, cur.drank);
+        const hit = words.filter(w => g[w] === '났어요').length, part = words.filter(w => g[w] === '조금').length, asked = words.filter(w => g[w] && g[w] !== '모르겠어요').length;
+        return `<div class="drank row">
+          <span class="note">마신 날</span>
+          <button class="dk${cur.drank === today() ? ' on' : ''}" data-d="today">오늘 마셨어요</button>
+          <input type="date" id="drankDate" value="${cur.drank || ''}" style="width:auto">
+          <span class="dkdays">${days != null ? `볶은 지 <b>${days}일째</b>${days < 3 ? ' · 아직 향이 덜 열렸을 수 있어요' : days <= 10 ? ' · 맛보기 좋은 때' : ''}` : '볶은 지 며칠째인지 계산해 줘요'}</span>
+        </div>` + (words.length ? `<div class="goalbox">
+          <div class="row"><b style="flex:1">원했던 맛, 났나요?</b>${asked ? `<span class="goalscore">${words.length}개 중 ${hit}개 났어요${part ? ` · ${part}개 조금` : ''}</span>` : ''}</div>
+          ${words.map(w => `<div class="goalrow"><span class="gw">${w === prio ? '⭐ ' : ''}${w}</span><span class="gbtns">${GOAL.map(v => `<button class="gb g${GOAL.indexOf(v)}${g[w] === v ? ' on' : ''}" data-w="${w}" data-v="${v}">${v}</button>`).join('')}</span></div>`).join('')}
+        </div>` : `<div class="note">이 배치는 볶을 때 고른 원하는 맛이 없어요. 다음부터 레시피 탭 "2. 원하는 맛"에서 고르면 여기서 났는지 체크할 수 있어요.</div>`);
+      })()}
       <div class="row cuphow">
         <span class="note">마신 방식</span>
         ${['핫', '아이스'].map(v => `<button class="chip hw ${cur.serve === v ? 'on' : ''}" data-f="serve" data-v="${v}">${v === '핫' ? '☕ 핫' : '🧊 아이스'}</button>`).join('')}
@@ -115,6 +142,13 @@ window.CUP = (() => {
       try { localStorage.setItem(f === 'serve' ? 'cupServe' : 'cupBrew', cur[f]); } catch {}
       save(); render();
     });
+    $('cupForm').querySelectorAll('.gb').forEach(b => b.onclick = () => {
+      const w = b.dataset.w, v = b.dataset.v; cur.goal = cur.goal || {};
+      if (cur.goal[w] === v) delete cur.goal[w]; else cur.goal[w] = v;
+      save(); render();
+    });
+    $('cupForm').querySelectorAll('.dk').forEach(b => b.onclick = () => { cur.drank = cur.drank === today() ? '' : today(); save(); render(); });
+    $('drankDate').onchange = e => { cur.drank = e.target.value; save(); render(); };
     $('cupForm').querySelectorAll('.infob').forEach(b => b.onclick = () => { open.help = !open.help; render(); });
     $('cupForm').querySelectorAll('.fold').forEach(b => b.onclick = () => { open[b.dataset.sec] = !open[b.dataset.sec]; render(); });
     $('cupForm').querySelectorAll('.csw').forEach(b => b.onclick = () => {
@@ -156,5 +190,5 @@ window.CUP = (() => {
   window.onMark = async name => { await origMark?.(name); if (name === '배출') { idx = -1; render(); } };
   addEventListener('resize', radar);
   render();
-  return { text, render, ITEMS, idx: () => idx };
+  return { text, goalText, render, ITEMS, idx: () => idx };
 })();

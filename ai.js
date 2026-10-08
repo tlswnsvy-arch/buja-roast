@@ -122,7 +122,7 @@ function refText() {
 }
 
 function beanText() {
-  return `생두: ${$v('bName') || '(이름 없음)'} / 산지·품종: ${$v('bOrigin') || '-'} / 가공: ${$v('bProcess')} / 수분: ${$v('bMoist') || '모름'}% / 투입량: ${$v('bAmt') || '300'}g / 배전도: ${$v('bLevel') === 'AI가 정하기' ? 'AI가 정해줘(생두 특성과 원하는 맛, 마시는 방법을 보고 고수들이 이 생두에 가장 많이 권하는 배전도로)' : $v('bLevel') + '(사용자가 직접 고름)'} / 마시는 방법: ${$v('bBrew')} / 원하는 맛: ${$v('bTaste') || '-'}`;
+  return `생두: ${$v('bName') || '(이름 없음)'} / 산지·품종: ${$v('bOrigin') || '-'} / 가공: ${$v('bProcess')} / 수분: ${$v('bMoist') || '모름'}% / 투입량: ${$v('bAmt') || '300'}g / 배전도: ${$v('bLevel') === 'AI가 정하기' ? 'AI가 정해줘(생두 특성과 원하는 맛, 마시는 방법을 보고 고수들이 이 생두에 가장 많이 권하는 배전도로)' : $v('bLevel') + '(사용자가 직접 고름)'} / 마시는 방법: ${$v('bBrew')} / 원하는 맛: ${$v('bTaste') || '-'}${$v('bPrio') ? ` / 가장 중요한 맛: ${$v('bPrio')} (다른 맛과 부딪치면 이 맛을 우선)` : ''}`;
 }
 const wxText = () => WX ? `오늘 날씨(${WX.where}): ${WX.temp}°C, 습도 ${WX.rh}%, 기압 ${WX.hpa}hPa` : '날씨 정보 없음';
 
@@ -159,7 +159,7 @@ JSON으로만 답해라:
   btn.disabled = false;
 }
 
-const readBean = () => ({ name: $v('bName'), origin: $v('bOrigin'), process: $v('bProcess'), moist: $v('bMoist'), amt: $v('bAmt'), level: $v('bLevel'), brew: $v('bBrew'), taste: $v('bTaste') });
+const readBean = () => ({ name: $v('bName'), origin: $v('bOrigin'), process: $v('bProcess'), moist: $v('bMoist'), amt: $v('bAmt'), level: $v('bLevel'), brew: $v('bBrew'), taste: $v('bTaste'), prio: $v('bPrio') });
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
 // 예전 추천에 남은 내부 이름('고수 관점 A와 B를 결합하여')을 화면·음성에서 뺀다
@@ -417,6 +417,8 @@ ${pvaText}
 실제 결과: 투입 ${rec.charge}°C, 1차 크랙 ${rec.fc || '-'}, 배출 ${rec.drop}, DTR ${rec.dtr}%, 댐퍼 기록 ${JSON.stringify(rec.damperLog || [])}
 곡선 요약[투입 뒤 초, BT, ET, 버너%, 댐퍼(값/10 = 칸)]: ${JSON.stringify(rec.curve.filter(c => c[0] >= -10).filter((_, i) => i % 2 === 0))}
 ${(() => { const t = [window.CUP?.text(rec), rec.cupping].filter(Boolean).join(' / '); return t ? '사용자 맛 평가: ' + t : '아직 맛 평가 없음'; })()}
+${window.CUP?.goalText(rec) || ''}
+맛 판단 규칙: '모르겠어요'는 판단에서 뺀다. 볶은 지 3일이 안 됐으면 과일·꽃 향이 아직 덜 열렸을 수 있으니 레시피 탓으로 단정하지 마라. 총점이 4점 이상이면 크게 바꾸지 마라. 안 난 목표 맛이 있으면 가장 중요한 맛을 살리는 변경을 1번 선택지로 하고, 서로 부딪치는 목표 맛(예: 화사한 산미와 묵직한 초콜릿)이 있으면 같이 내기 어렵다고 bad에 알려라.
 결과를 추천과 비교하고, 예상과 어긋난 곳이 있으면 왜 그랬는지(기계 반응, 예열 상태, 생두 특성, 날씨, 사람이 누른 시점 등) 곡선 근거를 들어 설명해라. 다음 배치에서 바꿀 것을 1~3개 골라라. 한 번에 하나씩 바꾸는 원칙을 지키되, 서로 다른 선택지로 줘라(사용자가 하나를 고른다).
 JSON으로만: {"deviation":["예상과 달랐던 점과 이유 1~3개 (같았으면 '예상대로 진행'이라고)"],"good":["잘된 점 1~2개"],"bad":["아쉬운 점 1~2개"],"changes":[{"label":"버튼에 쓸 짧은 문장","why":"이유 한 줄","patch":{"바꿀 키만":"값"}}]}
 patch에 쓸 수 있는 키: charge, startBurner, steps(전체 배열 [{bt,burner}]), drop, rise, dtSec. 숫자로.` }] }], { json: true, system: SYSTEM });
@@ -617,12 +619,12 @@ $('histFile').onchange = async e => {
 // 배전도 기본값이 'AI가 정하기'로 바뀌었으니 예전에 저장된 배전도는 한 번 지운다
 if (!store.get('levelV2', false)) { try { localStorage.removeItem('bean_bLevel'); } catch {} store.set('levelV2', true); }
 // 입력한 생두 정보 기억
-['bName', 'bOrigin', 'bProcess', 'bMoist', 'bAmt', 'bLevel', 'bBrew', 'bTaste'].forEach(id => {
+['bName', 'bOrigin', 'bProcess', 'bMoist', 'bAmt', 'bLevel', 'bBrew', 'bTaste', 'bPrio'].forEach(id => {
   const saved = store.get('bean_' + id, null); if (saved != null) $(id).value = saved;
   $(id).addEventListener('change', () => store.set('bean_' + id, $(id).value));
 });
 // ---------- 생두 목록 ----------
-const BEAN_FIELDS = { name: 'bName', origin: 'bOrigin', process: 'bProcess', moist: 'bMoist', amt: 'bAmt', level: 'bLevel', brew: 'bBrew', taste: 'bTaste' };
+const BEAN_FIELDS = { name: 'bName', origin: 'bOrigin', process: 'bProcess', moist: 'bMoist', amt: 'bAmt', level: 'bLevel', brew: 'bBrew', taste: 'bTaste', prio: 'bPrio' };
 const PROCESSES = ['워시드', '내추럴', '허니', '무산소(애너로빅)'];
 function guessBean(name) {
   // 기록 이름에서 산지·가공을 대충 추정 (예: "파나마 라 후이카 옐로우 카투아이 내추럴")
@@ -656,7 +658,7 @@ function renderBeans() {
 $('beanOpen').onclick = () => { $('beanPanel').hidden = !$('beanPanel').hidden; };
 // 생두 칸 비우기 (투입량·배전도·마시는 방법은 그대로). 레시피도 그 생두 것이 아니면 비운다
 function clearBean() {
-  for (const id of ['bName', 'bOrigin', 'bMoist', 'bTaste']) { $(id).value = ''; store.set('bean_' + id, ''); }
+  for (const id of ['bName', 'bOrigin', 'bMoist', 'bTaste', 'bPrio']) { $(id).value = ''; store.set('bean_' + id, ''); }
   $('bProcess').value = '워시드'; store.set('bean_bProcess', '워시드');
   lastRec = null; store.set('lastRec', null);
   $('rec').innerHTML = '<div class="note">아직 추천이 없어요. 위에서 추천을 받으세요.</div>';
@@ -741,6 +743,15 @@ const splitTaste = t => String(t || '').split(/,\s*/).map(x => x.trim()).filter(
 function syncChips() {
   const cur = splitTaste($v('bTaste'));
   document.querySelectorAll('#tasteChips .chip.word').forEach(c => c.classList.toggle('on', cur.includes(c.dataset.w)));
+  // 고른 맛이 2개 이상이면 그중 가장 중요한 맛 하나를 ⭐로 고르게 한다
+  const words = cur.filter(w => w.length <= 12);
+  if (!words.includes($v('bPrio'))) { $('bPrio').value = ''; store.set('bean_bPrio', ''); }
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  $('prioRow').hidden = words.length < 2;
+  $('prioRow').innerHTML = `<span class="note">⭐ 가장 중요한 맛 (하나만)</span>` + words.map(w => `<button class="pr${$v('bPrio') === w ? ' on' : ''}" data-w="${esc(w)}">${$v('bPrio') === w ? '⭐ ' : ''}${esc(w)}</button>`).join('');
+  $('prioRow').querySelectorAll('.pr').forEach(b => b.onclick = () => {
+    const w = b.dataset.w; $('bPrio').value = $v('bPrio') === w ? '' : w; store.set('bean_bPrio', $v('bPrio')); syncChips();
+  });
 }
 function renderTasteChips() {
   // 저장된 단어 + 지금 생두에 적혀 있는 짧은 단어(다른 기기·예전 입력)도 버튼으로 보여준다
