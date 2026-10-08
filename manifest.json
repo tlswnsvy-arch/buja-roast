@@ -1,11 +1,11 @@
 {
-  "name": "부자 AI 로스팅",
+  "name": "BUJA AI 로스팅",
   "short_name": "AI 로스팅",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#141416",
-  "theme_color": "#141416",
+  "background_color": "#1c1d22",
+  "theme_color": "#1c1d22",
   "orientation": "any",
   "icons": [
     {
