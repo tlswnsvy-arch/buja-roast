@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>부자 AI 로스팅</title>
 <link rel="stylesheet" href="style.css?v=42">
-<link rel="manifest" href="manifest.json?v=2">
+<link rel="manifest" href="manifest.json?v=3">
 <link rel="icon" href="icon-192.png?v=2">
 <link rel="apple-touch-icon" href="icon-192.png?v=2">
 <meta name="theme-color" content="#1c1d22">
@@ -192,6 +192,16 @@
 
   <!-- 설정 -->
   <section class="tab" id="tab-settings" hidden>
+    <section class="card">
+      <h2>기록 백업</h2>
+      <div class="note">볶은 기록, 생두, 레시피, 맛 평가는 이 태블릿 크롬 안에만 있어요. 크롬 데이터를 지우거나 기기를 바꾸면 사라지니 가끔 파일로 저장해 두세요. (Gemini 키는 백업에 넣지 않아요)</div>
+      <div class="row">
+        <button id="backupSave" class="go">백업 파일로 저장</button>
+        <label class="chip pick" style="padding:11px 16px">백업 불러오기<input type="file" id="backupLoad" accept=".json,application/json" hidden></label>
+        <button id="backupUndo" hidden>불러오기 전으로 되돌리기</button>
+      </div>
+      <span class="note" id="backupInfo"></span>
+    </section>
     <section class="card">
       <h2>설정</h2>
       <label>Gemini API 키 (이 기기에만 저장돼요)<input id="key" type="password" placeholder="AQ... 또는 AIza..."></label>
@@ -565,6 +575,7 @@ draw();
 <script src="auto.js?v=44"></script>
 <script src="replay.js?v=43"></script>
 <script src="cupping.js?v=57"></script>
+<script src="backup.js?v=2"></script>
 <script src="ui.js?v=52"></script>
 </body>
 </html>
