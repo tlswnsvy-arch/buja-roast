@@ -38,9 +38,17 @@ window.ALARM = (() => {
         if (!r.ok) continue;
         const d = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.inlineData;
         if (!d?.data) continue;
-        // 24kHz 16비트 PCM → 오디오 버퍼
-        const raw = atob(d.data), n = raw.length >> 1, buf = ctx.createBuffer(1, n, 24000), ch = buf.getChannelData(0);
-        for (let i = 0; i < n; i++) { let v = raw.charCodeAt(2 * i) | (raw.charCodeAt(2 * i + 1) << 8); if (v >= 32768) v -= 65536; ch[i] = v / 32768; }
+        const raw = atob(d.data), bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        let buf;
+        if (/wav/i.test(d.mimeType || '') || raw.startsWith('RIFF')) {
+          // WAV 파일로 온다: 머리와 꼬리 정보까지 소리로 틀면 끝에 '콰악' 잡음이 나므로 브라우저가 해석하게 한다
+          buf = await ctx.decodeAudioData(bytes.buffer);
+        } else {
+          // 날 PCM(24kHz 16비트)
+          const n = bytes.length >> 1, dv = new DataView(bytes.buffer); buf = ctx.createBuffer(1, n, 24000);
+          const ch = buf.getChannelData(0); for (let i = 0; i < n; i++) ch[i] = dv.getInt16(2 * i, true) / 32768;
+        }
         if (text.length < 80) cache.set(text, buf);
         return buf;
       } catch {}
@@ -80,7 +88,8 @@ window.ALARM = (() => {
 
 window.AUTO = (() => {
   let paused = null, on = false, phase = 'off', mode = 'full', target = 0, burnerNow = null, lastSet = 0, adj = 0, lastAdjAt = 0,
-    holdSince = 0, readyRung = false, fcWarned = false, wake = null, stepIdx = 0, holdBase = 40, coolTimer = null;
+    holdSince = 0, readyRung = false, fcWarned = false, wake = null, stepIdx = 0, holdBase = 40, coolTimer = null, preStart = 0, stallSince = 0;
+  const PREHEAT_MAX_MIN = 20;
   const say = t => { $('autoMsg').textContent = t; log('자동: ' + t); };
 
   async function setBurner(v, why) {
@@ -99,7 +108,7 @@ window.AUTO = (() => {
     paused = null; $('resumeBtn').style.display = 'none';
     ALARM.unlock();
     mode = m; target = preheatTo;
-    on = true; adj = 0; holdSince = 0; readyRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
+    on = true; adj = 0; holdSince = 0; preStart = 0; stallSince = 0; readyRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
     phase = chargeAt == null ? 'preheat' : 'roast';
     try { wake = await navigator.wakeLock?.request('screen'); } catch {}   // 화면이 꺼지면 안전장치가 버너를 끄므로 켜둔다
     $('autoBanner').style.display = 'block';
@@ -122,6 +131,16 @@ window.AUTO = (() => {
   function stopUi() {
     on = false; $('autoAck').checked = false; $('autoBanner').style.display = 'none';
     try { wake?.release(); } catch {} wake = null;
+  }
+
+  // 자동을 먼저 끊고(다음 틱이 버너를 다시 올리지 않게) 그다음 버너 0
+  async function preheatAbort(why) {
+    if (!on) return;
+    cancel(why + ' → 버너를 껐어요');
+    $('phase').textContent = '예열 멈춤';
+    ALARM.ring('예열을 멈췄어요. ' + why, 4);
+    await CONTROL.cmd('burner', 0);
+    await CONTROL.cmd('burner', 0);
   }
 
   function cancel(reason) {
@@ -168,6 +187,21 @@ window.AUTO = (() => {
       }
       // 목표 온도까지 데우고 유지: 멀면 100%, 가까워지면 PI 제어(유지에 필요한 버너를 천천히 배움)
       const gap = target - st.bt;
+      if (!preStart) preStart = now;
+      const preSec = (now - preStart) / 1000, rr = ror('bt');
+
+      // 예열 안전장치 (예전 로스터에서 목표에 못 닿아 계속 과열된 일이 있어서)
+      // 1) 20분 넘게 예열  2) 버너를 세게 넣는데 3분째 1분에 1도도 안 오름  3) 준비 완료 뒤 15분 동안 투입 없음
+      if (!holdSince && !readyRung && preSec > PREHEAT_MAX_MIN * 60) return preheatAbort(`예열이 ${PREHEAT_MAX_MIN}분을 넘었어요 (BT ${st.bt}°, 목표 ${target}°)`);
+      if (st.burner >= 70 && gap > 5 && rr != null && rr < 1) { if (!stallSince) stallSince = now; } else stallSince = 0;
+      if (stallSince && now - stallSince > 180000) return preheatAbort(`버너를 세게 넣는데 3분째 온도가 안 올라요 (BT ${st.bt}°). 히터나 센서를 확인하세요`);
+      if (holdSince && now - holdSince > 15 * 60000) return preheatAbort('준비 완료 뒤 15분 동안 투입이 없어서 예열을 껐어요');
+
+      // 예열 진행 표시: 경과 시간 · 남은 온도 · 예상 시간
+      const eta = gap > 3 && rr > 1 ? ` · 약 ${Math.ceil(gap / rr)}분 예상` : '';
+      const prog = `예열 ${Math.floor(preSec / 60)}:${String(Math.floor(preSec % 60)).padStart(2, '0')} · BT ${st.bt}° → 목표 ${target}°` + (gap > 3 ? ` · ${Math.round(gap)}° 남음${eta}` : ' · 도착');
+      $('phase').textContent = prog;
+      if (!holdSince || now - holdSince <= 30000) $('autoMsg').textContent = prog + ` (최대 ${PREHEAT_MAX_MIN}분)`;
       if (now - lastSet > 5000) {
         if (gap > 25) { holdBase = 40; setBurner(100, `예열 BT ${st.bt}° → 목표 ${target}°`); }
         else {
