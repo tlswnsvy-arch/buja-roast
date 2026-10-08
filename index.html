@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>부자 로스팅 모니터</title>
+<style>
+  :root { --bg:#1b1b1d; --card:#262629; --line:#3a3a3e; --text:#f2f2f2; --dim:#9a9aa0; --bt:#e0506e; --et:#2ea8e0; --ror:#f0a040; --burner:#9b6bff; --ok:#3ccf7a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI",Roboto,"Apple SD Gothic Neo",sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:18px; margin:0; flex:1; }
+  #state { font-size:14px; color:var(--dim); }
+  button { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px 16px; font-size:15px; cursor:pointer; }
+  button.main { background:#d9534f; border-color:#d9534f; font-weight:600; }
+  button:disabled { opacity:.4; cursor:default; }
+  main { padding:12px 16px; display:grid; gap:12px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .tile { background:var(--card); border-radius:12px; padding:12px; }
+  .tile .k { font-size:13px; color:var(--dim); }
+  .tile .v { font-size:34px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .tile .s { font-size:13px; color:var(--dim); margin-top:2px; font-variant-numeric:tabular-nums; }
+  #bt .v { color:var(--bt); } #et .v { color:var(--et); } #burner .v { color:var(--burner); }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .chip { background:var(--card); border-radius:999px; padding:6px 12px; font-size:14px; color:var(--dim); }
+  .chip.on { color:#111; background:var(--ok); }
+  canvas { width:100%; height:420px; background:var(--card); border-radius:12px; display:block; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  #events { font-size:14px; color:var(--dim); }
+  #log { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--dim); background:var(--card); border-radius:12px; padding:10px; max-height:160px; overflow:auto; white-space:pre-wrap; }
+  .note { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>부자 로스팅 모니터 <span class="note">(읽기 전용)</span></h1>
+  <span id="state">연결 안 됨</span>
+  <button class="main" id="connect">로스터 연결</button>
+</header>
+<main>
+  <div class="tiles">
+    <div class="tile" id="bt"><div class="k">BT 원두 온도</div><div class="v">-</div><div class="s">RoR -</div></div>
+    <div class="tile" id="et"><div class="k">ET 배기 온도</div><div class="v">-</div><div class="s">RoR -</div></div>
+    <div class="tile" id="burner"><div class="k">버너</div><div class="v">-</div><div class="s">&nbsp;</div></div>
+    <div class="tile" id="timer"><div class="k">경과 시간</div><div class="v">0:00</div><div class="s" id="phase">투입 전</div></div>
+  </div>
+  <div class="chips">
+    <span class="chip" id="cMode">모드 -</span>
+    <span class="chip" id="cFan">쿨링</span>
+    <span class="chip" id="cDrop">배출구</span>
+    <span class="chip" id="cTarget">예열 목표 -</span>
+  </div>
+  <canvas id="chart"></canvas>
+  <div class="row">
+    <button id="eCharge" disabled>투입</button>
+    <button id="e1C" disabled>1차 크랙</button>
+    <button id="eDrop" disabled>배출</button>
+    <button id="swap">BT/ET 바꾸기</button>
+    <button id="save">기록 저장(CSV)</button>
+    <span id="events"></span>
+  </div>
+  <div class="note">이 화면은 로스터에 상태 요청만 보내고 불·쿨링·배출 명령은 보내지 않아요. 사용 중에는 부자 앱 연결을 끊어주세요.</div>
+  <div id="log"></div>
+</main>
+<script>
+// 부자로스터 B30s BLE: FFE0/FFE1, 프레임 02 LEN payload 03 (PROTOCOL.md)
+const SVC = 0xffe0, CHR = 0xffe1;
+// 읽기 전용: 이 두 프레임 말고는 절대 보내지 않는다
+const SAFE = { hello: [0x02, 0x02, 0x61, 0x52, 0x03], status: [0x02, 0x01, 0x43, 0x03] };
+
+const $ = id => document.getElementById(id);
+let chr = null, pollTimer = null, rx = [], swapped = false;
+const samples = [];   // {t, bt, et, burner}
+const events = {};    // name -> {t, bt}
+let t0 = null, chargeAt = null;
+
+function log(s) { const el = $('log'); el.textContent = `${new Date().toLocaleTimeString()} ${s}\n` + el.textContent.slice(0, 4000); }
+const hex = a => [...a].map(b => b.toString(16).padStart(2, '0')).join(' ');
+
+async function send(frame) {
+  if (frame !== SAFE.hello && frame !== SAFE.status) throw new Error('읽기 전용 모드: 허용되지 않은 명령');
+  await chr.writeValueWithResponse(new Uint8Array(frame));
+}
+
+function onData(e) {
+  rx.push(...new Uint8Array(e.target.value.buffer));
+  // 02 LEN ... 03 단위로 잘라 처리 (상태 응답은 두 조각으로 나뉘어 옴)
+  while (rx.length >= 2) {
+    const s = rx.indexOf(0x02);
+    if (s < 0) { rx = []; return; }
+    if (s > 0) rx = rx.slice(s);
+    const len = rx[1], need = len + 3;
+    if (rx.length < need) return;
+    const f = rx.slice(0, need); rx = rx.slice(need);
+    if (f[need - 1] !== 0x03) { log('깨진 프레임 ' + hex(f)); continue; }
+    handle(f.slice(2, 2 + len));
+  }
+}
+
+function handle(p) {
+  if (p[0] === 0x43 && p.length >= 18) {
+    const d = p.slice(1);
+    let t1 = (d[1] << 8) | d[2], t2 = (d[3] << 8) | d[4];
+    if (swapped) [t1, t2] = [t2, t1];
+    const st = { mode: d[0], bt: t1, et: t2, burner: d[5], fan: d[7], drop: d[8], target: (d[11] << 8) | d[12] };
+    addSample(st);
+  } else if (p[0] === 0x61) log('로스터 응답: 연결 확인');
+  else log('응답 ' + hex(p));
+}
+
+function ror(key) {
+  // 최근 30초 기울기 (°C/분)
+  const now = samples[samples.length - 1]; if (!now) return null;
+  const old = samples.find(s => s.t >= now.t - 30);
+  if (!old || now.t - old.t < 10) return null;
+  return (now[key] - old[key]) / (now.t - old.t) * 60;
+}
+
+function addSample(st) {
+  const now = performance.now() / 1000;
+  if (t0 === null) t0 = now;
+  samples.push({ t: now - t0, bt: st.bt, et: st.et, burner: st.burner });
+  const r1 = ror('bt'), r2 = ror('et');
+  $('bt').querySelector('.v').textContent = st.bt + '°';
+  $('et').querySelector('.v').textContent = st.et + '°';
+  $('bt').querySelector('.s').textContent = 'RoR ' + (r1 == null ? '-' : r1.toFixed(1) + '°/분');
+  $('et').querySelector('.s').textContent = 'RoR ' + (r2 == null ? '-' : r2.toFixed(1) + '°/분');
+  $('burner').querySelector('.v').textContent = st.burner + '%';
+  $('cMode').textContent = '모드 ' + ({ 0: '대기', 3: '예열' }[st.mode] ?? st.mode);
+  $('cFan').classList.toggle('on', !!st.fan);
+  $('cDrop').classList.toggle('on', !!st.drop);
+  $('cTarget').textContent = '예열 목표 ' + (st.target || '-') + (st.target ? '°' : '');
+  const el = chargeAt == null ? 0 : samples[samples.length - 1].t - chargeAt;
+  $('timer').querySelector('.v').textContent = `${Math.floor(el / 60)}:${String(Math.floor(el % 60)).padStart(2, '0')}`;
+  draw();
+}
+
+function mark(name) {
+  const s = samples[samples.length - 1]; if (!s) return;
+  if (name === '투입') { chargeAt = s.t; $('phase').textContent = '로스팅 중'; }
+  events[name] = { t: s.t, bt: s.bt };
+  if (name === '1차 크랙') $('phase').textContent = '디벨롭';
+  if (name === '배출') {
+    const c = events['1차 크랙'];
+    const dtr = c && chargeAt != null ? ((s.t - c.t) / (s.t - chargeAt) * 100).toFixed(1) : '-';
+    $('phase').textContent = `끝 · DTR ${dtr}%`;
+  }
+  $('events').textContent = Object.entries(events).map(([k, v]) => `${k} ${v.bt}° @${fmt(v.t - (chargeAt ?? 0))}`).join(' · ');
+  draw();
+}
+const fmt = s => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
+
+function draw() {
+  const cv = $('chart'), dpr = devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr);
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const L = 40, R = 40, T = 12, B = 24, w = W - L - R, h = H - T - B;
+  const tMax = Math.max(600, (samples.at(-1)?.t ?? 0) + 30);
+  const x = t => L + t / tMax * w, y = v => T + h - v / 250 * h, yr = v => T + h - v / 50 * h;
+  g.font = '11px sans-serif'; g.fillStyle = css('--dim'); g.strokeStyle = css('--line'); g.lineWidth = 1;
+  for (let v = 0; v <= 250; v += 50) { g.beginPath(); g.moveTo(L, y(v)); g.lineTo(W - R, y(v)); g.stroke(); g.fillText(v, 6, y(v) + 4); g.fillText(v / 5, W - R + 6, y(v) + 4); }
+  for (let t = 0; t <= tMax; t += 60) g.fillText(t / 60, x(t) - 3, H - 6);
+  const line = (key, color, f = y, src = samples) => { g.strokeStyle = color; g.lineWidth = 2; g.beginPath(); src.forEach((s, i) => i ? g.lineTo(x(s.t), f(s[key])) : g.moveTo(x(s.t), f(s[key]))); g.stroke(); };
+  line('burner', css('--burner'), v => y(v));
+  line('et', css('--et')); line('bt', css('--bt'));
+  const rs = []; for (let i = 0; i < samples.length; i += 1) { const now = samples[i], old = samples.find(s => s.t >= now.t - 30); if (old && now.t - old.t >= 10) rs.push({ t: now.t, r: (now.bt - old.bt) / (now.t - old.t) * 60 }); }
+  line('r', css('--ror'), yr, rs);
+  g.fillStyle = css('--text');
+  for (const [k, v] of Object.entries(events)) { g.strokeStyle = css('--dim'); g.setLineDash([4, 4]); g.beginPath(); g.moveTo(x(v.t), T); g.lineTo(x(v.t), T + h); g.stroke(); g.setLineDash([]); g.fillText(`${k} ${v.bt}°`, x(v.t) + 4, T + 12); }
+}
+
+async function connect() {
+  if (!navigator.bluetooth) { alert('이 브라우저는 블루투스를 지원하지 않아요. 크롬으로 열어주세요.'); return; }
+  try {
+    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [SVC] }], optionalServices: [SVC] })
+      .catch(() => navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [SVC] }));
+    $('state').textContent = dev.name + ' 연결 중...';
+    dev.addEventListener('gattserverdisconnected', () => { $('state').textContent = '연결 끊김'; clearInterval(pollTimer); $('connect').disabled = false; });
+    const srv = await dev.gatt.connect();
+    chr = await (await srv.getPrimaryService(SVC)).getCharacteristic(CHR);
+    chr.addEventListener('characteristicvaluechanged', onData);
+    await chr.startNotifications();
+    await send(SAFE.hello);
+    pollTimer = setInterval(() => send(SAFE.status).catch(e => log('요청 실패 ' + e.message)), 1000);
+    $('state').textContent = dev.name + ' 연결됨';
+    $('connect').disabled = true;
+    ['eCharge', 'e1C', 'eDrop'].forEach(i => $(i).disabled = false);
+    log('연결됨: ' + dev.name);
+  } catch (e) { $('state').textContent = '연결 실패'; log('연결 실패: ' + e.message); }
+}
+
+function saveCsv() {
+  const rows = ['t_sec,bt,et,burner', ...samples.map(s => [s.t.toFixed(1), s.bt, s.et, s.burner].join(','))];
+  Object.entries(events).forEach(([k, v]) => rows.push(`# ${k},${v.t.toFixed(1)},${v.bt}`));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + rows.join('\n')], { type: 'text/csv' }));
+  a.download = `roast_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '')}.csv`;
+  a.click();
+}
+
+$('connect').onclick = connect;
+$('eCharge').onclick = () => mark('투입');
+$('e1C').onclick = () => mark('1차 크랙');
+$('eDrop').onclick = () => mark('배출');
+$('swap').onclick = () => { swapped = !swapped; log('BT/ET 순서 바꿈'); };
+$('save').onclick = saveCsv;
+addEventListener('resize', draw);
+// 화면 확인용 가짜 데이터: 주소 끝에 ?demo
+if (location.search.includes('demo')) {
+  let i = 0; const st = () => { const t = i++; const bt = t < 55 ? 200 - t * 2.3 : Math.min(205, 75 + (t - 55) * 0.25); handle([0x43, 0, 0, Math.round(bt), 0, Math.round(195 + t * 0.02), t < 240 ? 100 : 60, 1, 0, 0, 2, 0x58, 0, 0, 1, 0, 0, 0]); };
+  setInterval(st, 50);
+}
+draw();
+</script>
+</body>
+</html>
