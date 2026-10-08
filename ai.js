@@ -539,6 +539,7 @@ function coach(text, say = false) {
   if (!say && events['배출']) return;   // 배출 뒤 혼자 말하지 않게 (3번째 배치)
   const line = text.split('\n')[0];
   if (line === lastSpoken && Date.now() - lastSpokenAt < 30000) return;
+  if (!say && Date.now() - lastSpokenAt < 20000) return;   // 시뮬레이션: 'RoR 낮아요'가 9초마다 반복돼서
   lastSpoken = line; lastSpokenAt = Date.now(); ALARM.speak(line.replace(/°C?/g, '도').replace(/%/g, '퍼센트'));
 }
 
@@ -552,7 +553,13 @@ window.onSample = st => {
   const next = steps.findIndex(x => x.bt > s.bt);
   if (next >= 0 && r > 0) {
     const eta = (steps[next].bt - s.bt) / r * 60;
-    if (eta < 45 && saidStep < next) { saidStep = next; msgs.push(`약 ${Math.round(eta)}초 뒤 BT ${steps[next].bt}°C: 버너 ${steps[next].burner}%로 바꿀 준비`); }
+    if (eta < 45 && saidStep < next) {
+      saidStep = next;
+      const want = steps[next].burner;
+      // 미리 알림은 레시피 단계만 말한다. 자동 보정(±10%)은 그 사이에도 바뀌어서 숫자를 미리 말하면 실제와 달라진다
+      // (시뮬레이션: 미리 50%라 했는데 실제 60%). 실제 값은 바뀌는 순간 "버너 N퍼센트"로 알린다
+      msgs.push(`약 ${Math.round(eta)}초 뒤 BT ${steps[next].bt}°C: 다음 버너 단계 (레시피 ${want}%${window.AUTO?.on && AUTO.adj ? ', 실제 값은 보정이 더해져요' : ''})`);
+    }
   }
   // 1차 크랙 전후 RoR 경고
   const fc = events['1차 크랙'];

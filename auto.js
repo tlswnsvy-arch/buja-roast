@@ -122,7 +122,7 @@ window.AUTO = (() => {
     burnerNow = v; lastSet = Date.now();
     await CONTROL.cmd('burner', v);
     say(`버너 ${v}% · ${why}`);
-    if (phase === 'roast' && level() === 'all') ALARM.speak(`버너 ${v}퍼센트`);
+    if (phase === 'roast' && ALARM.level() === 'all') ALARM.speak(`버너 ${v}퍼센트${adj ? `, 레시피보다 ${Math.abs(adj)} ${adj > 0 ? '높게' : '낮게'}` : ''}`);   // level()만 쓰면 여기서는 없는 함수라 오류였음
   }
 
   async function begin(m, preheatTo, resuming = false) {
@@ -134,10 +134,11 @@ window.AUTO = (() => {
     mode = m; target = preheatTo;
     on = true; adj = 0; holdSince = 0; preStart = 0; stallSince = 0; maillardSaid = false; damperSaid = false; readyRung = false; prepRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
     phase = chargeAt == null ? 'preheat' : 'roast';
-    try { wake = await navigator.wakeLock?.request('screen'); } catch {}   // 화면이 꺼지면 안전장치가 버너를 끄므로 켜둔다
     $('autoBanner').style.display = 'block';
     $('autoBanner').textContent = (mode === 'full' ? 'AI 자동 로스팅 중' : `예열 중 (${target}°C)`) + ' · 로스터 옆을 떠나지 마세요 · 문제가 있으면 전체 정지';
     say(phase === 'preheat' ? `${mode === 'full' ? '자동 시작' : '예열만'}: ${target}°C까지 예열해요` : '자동 시작: 로스팅 진행 중이라 지금부터 따라가요');
+    // 안내를 먼저 쓰고 나서 화면 켜두기 요청 (기다리는 사이 단계가 바뀌면 안내가 엉뚱해지지 않게)
+    try { wake = await navigator.wakeLock?.request('screen'); } catch {}   // 화면이 꺼지면 안전장치가 버너를 끄므로 켜둔다
   }
 
   function start() {
@@ -352,5 +353,7 @@ window.AUTO = (() => {
     $('resumeBtn').style.display = 'block';
     ALARM.ring('로스터가 다시 연결됐어요. 이어가려면 자동 이어가기를 누르세요', 2, false);
   }
-  return { tick, cancel, offerResume, get on() { return on; } };
+  // 다음 단계에서 실제로 보낼 버너 값 (레시피 값 + 지금 보정). 음성 안내가 실제 값과 같게
+  const plannedBurner = (stepBurner, bt) => { const min = bt >= 175 ? -10 : -20; return Math.max(0, Math.min(100, stepBurner + Math.max(adj, min))); };
+  return { tick, cancel, offerResume, plannedBurner, get adj() { return adj; }, get on() { return on; } };
 })();
