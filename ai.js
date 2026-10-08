@@ -116,6 +116,7 @@ function renderRec() {
   const r = lastRec; if (!r) return;
   const e = r.expected || {};
   const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  $('rec').style.whiteSpace = 'normal';
   $('rec').innerHTML = `
     <div>${esc(r.summary)}</div>
     <div class="note" style="margin-top:8px">부자 앱 프로파일 설정 모드에 이렇게 넣으세요</div>
@@ -298,7 +299,39 @@ $('beanDel').onclick = () => {
   const v = $('beanPick').value; if (!v.startsWith('s')) return;
   const saved = store.get('beans', []); saved.splice(+v.slice(1), 1); store.set('beans', saved); renderBeans();
 };
-const alertBox = t => { $('rec').textContent = t; };
+const alertBox = t => { $('rec').style.whiteSpace = 'pre-wrap'; $('rec').textContent = t; };
+
+// 이름을 안 적으면 산지 + 가공으로
+const autoName = () => { if (!$v('bName') && $v('bOrigin')) { $('bName').value = `${$v('bOrigin')} ${$v('bProcess')}`; store.set('bean_bName', $('bName').value); } };
+['bOrigin', 'bProcess'].forEach(id => $(id).addEventListener('change', autoName));
+
+// 생두 봉투·라벨·판매 페이지 사진 → Gemini가 읽어서 칸 채우기
+async function imageToBase64(file) {
+  // 큰 사진은 1280px로 줄여서 보낸다
+  const img = await createImageBitmap(file), k = Math.min(1, 1280 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = img.width * k; c.height = img.height * k;
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.85).split(',')[1];
+}
+$('beanPhoto').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  alertBox('사진에서 생두 정보를 읽는 중...');
+  try {
+    const data = await imageToBase64(f);
+    const r = await gemini([{ role: 'user', parts: [
+      { inlineData: { mimeType: 'image/jpeg', data } },
+      { text: `이 사진은 커피 생두 봉투, 라벨, 또는 판매 페이지다. 읽을 수 있는 정보만 JSON으로 답해라. 모르면 빈 문자열.
+{"name":"짧은 생두 이름(한국어, 예: 콜롬비아 핀카 아나야 워시드)","origin":"산지/농장/품종","process":"워시드|내추럴|허니|무산소(애너로빅)|기타 중 하나","moist":"수분 % 숫자만","notes":"컵노트나 고도 등 참고 정보 짧게"}` },
+    ] }], { json: true });
+    if (r.name) $('bName').value = r.name;
+    if (r.origin) $('bOrigin').value = r.origin;
+    if (r.process) $('bProcess').value = PROCESSES.includes(r.process) ? r.process : '기타';
+    if (r.moist) $('bMoist').value = String(r.moist).replace(/[^\d.]/g, '');
+    Object.values(BEAN_FIELDS).forEach(id => store.set('bean_' + id, $(id).value));
+    alertBox(`사진에서 읽었어요: ${r.name || '-'} / ${r.origin || '-'} / ${r.process || '-'} / 수분 ${r.moist || '-'}${r.notes ? '\n참고: ' + r.notes : ''}\n맞으면 "이 생두 저장"을 눌러두세요.`);
+  } catch (err) { alertBox('사진 읽기 실패: ' + err.message); }
+  e.target.value = '';
+};
 
 // 맛 키워드: 눌러서 넣고 빼기
 const TASTES = ['꽃향', '자스민', '과일향', '베리', '시트러스', '열대과일', '와인', '초콜릿', '카카오', '견과', '캐러멜', '꿀', '단맛 많이', '산미 밝게', '산미 부드럽게', '바디 가볍게', '바디 묵직', '크리미', '깔끔한 후미', '쓴맛 적게'];
