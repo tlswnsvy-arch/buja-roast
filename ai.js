@@ -341,7 +341,7 @@ async function review(rec) {
 ${pvaText}
 실제 결과: 투입 ${rec.charge}°C, 1차 크랙 ${rec.fc || '-'}, 배출 ${rec.drop}, DTR ${rec.dtr}%, 댐퍼 기록 ${JSON.stringify(rec.damperLog || [])}
 곡선 요약[투입 뒤 초, BT, ET, 버너%, 댐퍼(값/10 = 칸)]: ${JSON.stringify(rec.curve.filter(c => c[0] >= -10).filter((_, i) => i % 2 === 0))}
-${(() => { const t = [window.CUP?.text(rec), $v('cupNote') || rec.cupping].filter(Boolean).join(' / '); return t ? '사용자 맛 평가: ' + t : '아직 맛 평가 없음'; })()}
+${(() => { const t = [window.CUP?.text(rec), rec.cupping].filter(Boolean).join(' / '); return t ? '사용자 맛 평가: ' + t : '아직 맛 평가 없음'; })()}
 결과를 추천과 비교하고, 예상과 어긋난 곳이 있으면 왜 그랬는지(기계 반응, 예열 상태, 생두 특성, 날씨, 사람이 누른 시점 등) 곡선 근거를 들어 설명해라. 다음 배치에서 바꿀 것을 1~3개 골라라. 한 번에 하나씩 바꾸는 원칙을 지키되, 서로 다른 선택지로 줘라(사용자가 하나를 고른다).
 JSON으로만: {"deviation":["예상과 달랐던 점과 이유 1~3개 (같았으면 '예상대로 진행'이라고)"],"good":["잘된 점 1~2개"],"bad":["아쉬운 점 1~2개"],"changes":[{"label":"버튼에 쓸 짧은 문장","why":"이유 한 줄","patch":{"바꿀 키만":"값"}}]}
 patch에 쓸 수 있는 키: charge, startBurner, steps(전체 배열 [{bt,burner}]), drop, rise, dtSec. 숫자로.` }] }], { json: true, system: SYSTEM });
@@ -741,9 +741,10 @@ $('tidyCup').onclick = async () => {
   const b = $('tidyCup');
   // 입력칸에 새로 적은 게 있으면 그걸 원문으로
   const all = store.get('myRoasts', []); if (!all.length) return;
-  if ($v('cupNote')) { all.at(-1).cupping = $v('cupNote'); delete all.at(-1).cuppingRaw; localStorage.setItem('myRoasts', JSON.stringify(all)); }
+  const i = window.CUP?.idx() >= 0 ? CUP.idx() : all.length - 1;   // 평가표에서 고른 배치
+  if ($v('cupNote')) { all[i].cupping = $v('cupNote'); delete all[i].cuppingRaw; localStorage.setItem('myRoasts', JSON.stringify(all)); }
   b.disabled = true; b.textContent = '정리 중...';
-  try { const neat = await tidyCupSave(); if (neat) $('cupNote').value = neat; window.renderLog?.(); }
+  try { const neat = await tidyCupSave(i); if (neat) $('cupNote').value = neat; window.renderLog?.(); }
   catch (e) { alert('정리 실패: ' + e.message); }
   b.disabled = false; b.textContent = '✨ AI로 정리';
 };

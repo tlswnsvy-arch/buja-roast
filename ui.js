@@ -57,11 +57,13 @@
   }
   window.renderLog = renderLog;
 
-  // 레시피 탭의 맛 평가는 마지막 배치에 저장
+  // 레시피 탭의 맛 글은 평가표에서 고른 배치에 저장 (기본은 마지막 배치)
   $('cupNote').addEventListener('change', () => {
     try {
       const all = JSON.parse(localStorage.getItem('myRoasts') || '[]'); if (!all.length) return;
-      all[all.length - 1].cupping = $v('cupNote'); localStorage.setItem('myRoasts', JSON.stringify(all));
+      const i = window.CUP?.idx() >= 0 ? CUP.idx() : all.length - 1;
+      all[i].cupping = $v('cupNote'); delete all[i].cuppingRaw; localStorage.setItem('myRoasts', JSON.stringify(all));
+      renderLog();
     } catch {}
   });
 

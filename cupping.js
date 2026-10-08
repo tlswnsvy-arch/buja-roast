@@ -16,7 +16,7 @@ window.CUP = (() => {
     good: ['꽃', '베리', '시트러스', '열대과일', '사과·배', '포도·와인', '꿀', '캐러멜', '초콜릿', '견과', '홍차', '크리미', '쥬시'],
     bad: ['풋내', '곡물·빵', '종이', '탄맛', '스모키', '떫음', '시큼함', '밋밋함', '짠맛'],
   };
-  let idx = -1, cur = null;
+  let idx = -1, cur = null, seenLen = 0;
   const all = () => { try { return JSON.parse(localStorage.getItem('myRoasts') || '[]'); } catch { return []; } };
   // 저장된 date는 세계 표준시라 한국 시간으로
   const when = r => { const d = r.ts ? new Date(r.ts) : new Date((r.date || '').replace(' ', 'T') + 'Z'); return isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -48,8 +48,10 @@ window.CUP = (() => {
   function render() {
     const a = all();
     if (!a.length) { $('cupForm').innerHTML = '<div class="note">볶은 배치가 생기면 여기서 평가할 수 있어요.</div>'; return; }
-    if (idx < 0 || !a[idx]) idx = a.length - 1;
+    if (idx < 0 || !a[idx] || a.length !== seenLen) idx = a.length - 1;   // 새 배치가 생기면 그 배치로
+    seenLen = a.length;
     cur = a[idx].cup || blank();
+    $('cupNote').value = a[idx].cupping || '';   // 글 칸도 고른 배치 것으로
     if (!a[idx].cup) { try { cur.serve = localStorage.getItem('cupServe') || ''; cur.brew = localStorage.getItem('cupBrew') || ''; } catch {} }
     const opts = a.map((r, i) => `<option value="${i}" ${i === idx ? 'selected' : ''}>${when(r)} ${r.bean?.name || '배치'}</option>`).reverse().join('');
     $('cupForm').innerHTML = `
@@ -117,5 +119,5 @@ window.CUP = (() => {
   window.onMark = async name => { await origMark?.(name); if (name === '배출') { idx = -1; render(); } };
   addEventListener('resize', radar);
   render();
-  return { text, render, ITEMS };
+  return { text, render, ITEMS, idx: () => idx };
 })();
