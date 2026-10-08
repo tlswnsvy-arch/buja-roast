@@ -257,5 +257,67 @@ $('histFile').onchange = async e => {
   const saved = store.get('bean_' + id, null); if (saved != null) $(id).value = saved;
   $(id).addEventListener('change', () => store.set('bean_' + id, $(id).value));
 });
+// ---------- 생두 목록 ----------
+const BEAN_FIELDS = { name: 'bName', origin: 'bOrigin', process: 'bProcess', moist: 'bMoist', amt: 'bAmt', level: 'bLevel', taste: 'bTaste' };
+const PROCESSES = ['워시드', '내추럴', '허니', '무산소(애너로빅)'];
+function guessBean(name) {
+  // 기록 이름에서 산지·가공을 대충 추정 (예: "파나마 라 후이카 옐로우 카투아이 내추럴")
+  const origins = [...$('originList').options].map(o => o.value).filter(o => !/버번|카투|게이샤|티피카|시드라|SL|7411|파카마라|블렌드/.test(o));
+  const origin = origins.find(o => name.includes(o.split(' ')[0])) || (/게이샤/.test(name) ? '게이샤' : '');
+  const process = name.includes('네추럴') || name.includes('내추럴') ? '내추럴' : name.includes('워시드') ? '워시드' : name.includes('허니') ? '허니' : /무산소|애너로빅/.test(name) ? '무산소(애너로빅)' : '';
+  return { name, origin, process };
+}
+function beanList() {
+  const saved = store.get('beans', []);
+  const fromHist = [...new Set(store.get('myHistory', []).map(r => (r.name || '').trim()).filter(n => n && !/^# ?\d+$/.test(n)))]
+    .map(n => n.replace(/\s*\d+차$/, '').trim())
+    .filter((n, i, a) => a.indexOf(n) === i && !saved.some(b => b.name === n))
+    .map(guessBean);
+  return { saved, fromHist };
+}
+function renderBeans() {
+  const { saved, fromHist } = beanList(), sel = $('beanPick');
+  sel.innerHTML = '<option value="">내 생두에서 고르기</option>' +
+    (saved.length ? `<optgroup label="저장한 생두">${saved.map((b, i) => `<option value="s${i}">${b.name}</option>`).join('')}</optgroup>` : '') +
+    (fromHist.length ? `<optgroup label="예전 로스팅 기록에서">${fromHist.map((b, i) => `<option value="h${i}">${b.name}</option>`).join('')}</optgroup>` : '');
+}
+$('beanPick').onchange = () => {
+  const v = $('beanPick').value; if (!v) return;
+  const { saved, fromHist } = beanList();
+  const b = v[0] === 's' ? saved[+v.slice(1)] : fromHist[+v.slice(1)];
+  for (const [k, id] of Object.entries(BEAN_FIELDS)) if (b[k] != null && b[k] !== '') { $(id).value = b[k]; store.set('bean_' + id, b[k]); }
+  if (b.process && !PROCESSES.includes(b.process)) $('bProcess').value = '기타';
+  syncChips();
+};
+$('beanSave').onclick = () => {
+  const b = readBean(); if (!b.name) { alertBox('생두 이름을 먼저 넣어주세요'); return; }
+  const saved = store.get('beans', []).filter(x => x.name !== b.name); saved.push(b);
+  store.set('beans', saved); renderBeans(); log('생두 저장: ' + b.name);
+};
+$('beanDel').onclick = () => {
+  const v = $('beanPick').value; if (!v.startsWith('s')) return;
+  const saved = store.get('beans', []); saved.splice(+v.slice(1), 1); store.set('beans', saved); renderBeans();
+};
+const alertBox = t => { $('rec').textContent = t; };
+
+// 맛 키워드: 눌러서 넣고 빼기
+const TASTES = ['꽃향', '자스민', '과일향', '베리', '시트러스', '열대과일', '와인', '초콜릿', '카카오', '견과', '캐러멜', '꿀', '단맛 많이', '산미 밝게', '산미 부드럽게', '바디 가볍게', '바디 묵직', '크리미', '깔끔한 후미', '쓴맛 적게'];
+function syncChips() {
+  const cur = $v('bTaste');
+  document.querySelectorAll('#tasteChips .chip').forEach(c => c.classList.toggle('on', cur.split(/,\s*/).includes(c.textContent)));
+}
+$('tasteChips').innerHTML = TASTES.map(t => `<span class="chip">${t}</span>`).join('');
+$('tasteChips').onclick = e => {
+  if (!e.target.classList.contains('chip')) return;
+  const t = e.target.textContent, list = $v('bTaste').split(/,\s*/).filter(Boolean);
+  const i = list.indexOf(t); i >= 0 ? list.splice(i, 1) : list.push(t);
+  $('bTaste').value = list.join(', '); store.set('bean_bTaste', $('bTaste').value); syncChips();
+};
+$('bTaste').addEventListener('input', syncChips);
+
+const _histChange = $('histFile').onchange;
+$('histFile').onchange = async e => { await _histChange(e); renderBeans(); };
+renderBeans();
+syncChips();
 renderRec();
 loadWeather();
