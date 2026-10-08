@@ -9,7 +9,7 @@ const store = {
 
 // 2026-10-08 태블릿 기록 58개에서 뽑은 규칙 (원본 기록은 넣지 않음)
 const LEARNED = `
-[이 로스터: 부자로스터 B30s 스마트, 전기식 드럼, 100~300g(최대 350g), 버너 0~100%, 댐퍼는 수동 원형 다이얼(보통 풀개방)]
+[이 로스터: 부자로스터 B30s 스마트, 전기식 드럼, 100~300g(최대 350g), 버너 0~100%, 댐퍼는 수동 원형 다이얼(보통 풀개방), 사용자가 화면에 개방 %를 기록함. 투입은 레버(수동), 1·2차 크랙은 귀로 듣고 버튼, 배출은 자동]
 - 전기 히터라 버너를 바꿔도 온도 반응이 30~60초 늦다. 버너는 목표 온도보다 미리 바꿔야 한다.
 - 부자 앱 "프로파일 설정 모드" = 'BT가 X도가 되면 버너 Y%' 단계들 + 배출 온도(자동 배출). 시작 버너는 100% 또는 지정값.
 - TP(터닝포인트)는 투입 온도와 상관없이 늘 53~60초.
@@ -98,7 +98,7 @@ ${historyText()}
 
 이 생두를 부자 앱 "프로파일 설정 모드"에 바로 입력할 수 있게 추천해라. 버너 단계는 2~4개, 전기 히터 지연을 감안해 미리 줄여라.
 JSON으로만 답해라:
-{"summary":"한두 문장 요약","charge":투입온도,"startBurner":시작버너%,"steps":[{"bt":온도,"burner":%}],"drop":배출온도,
+{"summary":"한두 문장 요약","charge":투입온도,"startBurner":시작버너%,"damper":"댐퍼 개방 % 추천(예: 처음 50 → 1차 크랙 전 100)","steps":[{"bt":온도,"burner":%}],"drop":배출온도,
 "expected":{"tpSec":초,"tpTemp":온도,"fcSec":초,"fcTemp":온도,"dropSec":초},"dtr":목표DTR%,
 "why":["이유 2~4개"],"watch":["로스팅 중 볼 것 2~4개(언제 무엇을 하면 되는지)"],"flavor":"예상되는 맛"}`;
     const r = await gemini([{ role: 'user', parts: [{ text: prompt }] }], { json: true, system: SYSTEM });
@@ -124,6 +124,7 @@ function renderRec() {
       <span class="step">시작 버너 ${esc(r.startBurner ?? 100)}%</span>
       ${(r.steps || []).map(s => `<span class="step">BT ${esc(s.bt)}°C → ${esc(s.burner)}%</span>`).join('')}
       <span class="step">배출 ${esc(r.drop)}°C</span>
+      ${r.damper ? `<span class="step">댐퍼 ${esc(r.damper)}</span>` : ""}
     </div>
     <div class="note">예상: TP ${e.tpSec ? mmss(e.tpSec) : '-'} · 1차 크랙 ${e.fcTemp || '-'}°C ${e.fcSec ? mmss(e.fcSec) : '-'} · 배출 ${e.dropSec ? mmss(e.dropSec) : '-'} · DTR ${esc(r.dtr)}%</div>
     <div style="margin-top:8px">왜 이렇게?<br>${(r.why || []).map(x => '· ' + esc(x)).join('<br>')}</div>
@@ -161,7 +162,7 @@ function liveText() {
   if (!samples.length) return '로스터 연결 안 됨 / 데이터 없음';
   const s = samples.at(-1), r = ror('bt');
   const el = chargeAt == null ? '투입 전' : `투입 후 ${mmss(s.t - chargeAt)}`;
-  return `지금: BT ${s.bt}°C, ET ${s.et}°C, BT RoR ${r == null ? '-' : r.toFixed(1)}°C/분, 버너 ${s.burner}%, ${el}, 이벤트: ${Object.entries(events).map(([k, v]) => `${k} ${v.bt}°C@${mmss(Math.max(0, v.t - (chargeAt ?? 0)))}`).join(', ') || '없음'}`;
+  return `지금: BT ${s.bt}°C, ET ${s.et}°C, BT RoR ${r == null ? '-' : r.toFixed(1)}°C/분, 버너 ${s.burner}%, 댐퍼 ${s.damper}%(수동), ${el}, 이벤트: ${Object.entries(events).map(([k, v]) => `${k} ${v.bt}°C@${mmss(Math.max(0, v.t - (chargeAt ?? 0)))}`).join(', ') || '없음'}`;
 }
 
 function addMsg(who, text) {
@@ -230,11 +231,11 @@ window.onMark = async name => {
       source: 'web', date: new Date().toISOString().slice(0, 16).replace('T', ' '), bean: readBean(),
       charge: events['투입']?.bt, fc: fc ? `${fc.bt}@${mmss(fc.t - chargeAt)}` : null, drop: `${d.bt}@${mmss(d.t - chargeAt)}`,
       dtr: fc ? +((d.t - fc.t) / (d.t - chargeAt) * 100).toFixed(1) : null, rec: lastRec && { charge: lastRec.charge, steps: lastRec.steps, drop: lastRec.drop },
-      curve: samples.filter((_, i) => i % 5 === 0).map(s => [Math.round(s.t - chargeAt), s.bt, s.et, s.burner]),
+      curve: samples.filter((_, i) => i % 5 === 0).map(s => [Math.round(s.t - chargeAt), s.bt, s.et, s.burner, s.damper]), damperLog: damperLog.map(d => [Math.round(d.t - chargeAt), d.v]),
     };
     const all = store.get('myRoasts', []); all.push(rec); store.set('myRoasts', all.slice(-100));
     coach('로스팅 기록을 이 기기에 저장했어요. AI 리뷰를 아래 채팅에 올릴게요.');
-    ask(`방금 로스팅이 끝났어. 결과를 추천과 비교해서 잘된 점, 아쉬운 점, 다음 배치에서 바꿀 것 1~3개를 알려줘. 곡선 요약: ${JSON.stringify(rec.curve.filter((_, i) => i % 3 === 0))}`);
+    ask(`방금 로스팅이 끝났어. 결과를 추천과 비교해서 잘된 점, 아쉬운 점, 다음 배치에서 바꿀 것 1~3개를 알려줘. 곡선 요약[초,BT,ET,버너,댐퍼]: ${JSON.stringify(rec.curve.filter((_, i) => i % 3 === 0))}`);
   }
 };
 

@@ -64,11 +64,18 @@
     <span class="chip" id="cDrop">배출구</span>
     <span class="chip" id="cTarget">예열 목표 -</span>
   </div>
+  <div class="row" id="damperRow">
+    <span class="note">댐퍼 개방 (기록용)</span>
+    <button data-d="0">0</button><button data-d="25">25</button><button data-d="50">50</button><button data-d="75">75</button><button data-d="100">100</button>
+    <input id="damperIn" type="number" min="0" max="100" step="5" style="width:80px" placeholder="%">
+    <span id="damperNow" class="chip">댐퍼 100%</span>
+  </div>
   <div id="coach"></div>
   <canvas id="chart"></canvas>
   <div class="row">
     <button id="eCharge" disabled>투입</button>
     <button id="e1C" disabled>1차 크랙</button>
+    <button id="e2C" disabled>2차 크랙</button>
     <button id="eDrop" disabled>배출</button>
     <button id="swap">BT/ET 바꾸기</button>
     <button id="save">기록 저장(CSV)</button>
@@ -119,7 +126,9 @@ const SAFE = { hello: [0x02, 0x02, 0x61, 0x52, 0x03], status: [0x02, 0x01, 0x43,
 
 const $ = id => document.getElementById(id);
 let chr = null, pollTimer = null, rx = [], swapped = false;
-const samples = [];   // {t, bt, et, burner}
+const samples = [];   // {t, bt, et, burner, damper}
+let damper = 100;     // 수동 다이얼이라 로스터가 모름: 사용자가 누른 값을 기록만 한다
+const damperLog = []; // {t, v}
 const events = {};    // name -> {t, bt}
 let t0 = null, chargeAt = null;
 
@@ -157,18 +166,23 @@ function handle(p) {
   else log('응답 ' + hex(p));
 }
 
-function ror(key) {
-  // 최근 30초 기울기 (°C/분)
-  const now = samples[samples.length - 1]; if (!now) return null;
-  const old = samples.find(s => s.t >= now.t - 30);
-  if (!old || now.t - old.t < 10) return null;
-  return (now[key] - old[key]) / (now.t - old.t) * 60;
+function ror(key, end = samples.length - 1) {
+  // 최근 30초 최소제곱 기울기 (°C/분): 온도가 정수라 두 점 차이는 톱니처럼 흔들린다
+  const now = samples[end]; if (!now) return null;
+  let n = 0, st = 0, sv = 0, stt = 0, stv = 0;
+  for (let i = end; i >= 0 && samples[i].t >= now.t - 30; i--) {
+    const t = samples[i].t - now.t, v = samples[i][key];
+    n++; st += t; sv += v; stt += t * t; stv += t * v;
+  }
+  const den = n * stt - st * st;
+  if (n < 8 || den === 0) return null;
+  return (n * stv - st * sv) / den * 60;
 }
 
 function addSample(st) {
   const now = performance.now() / 1000;
   if (t0 === null) t0 = now;
-  samples.push({ t: now - t0, bt: st.bt, et: st.et, burner: st.burner });
+  samples.push({ t: now - t0, bt: st.bt, et: st.et, burner: st.burner, damper });
   const r1 = ror('bt'), r2 = ror('et');
   $('bt').querySelector('.v').textContent = st.bt + '°';
   $('et').querySelector('.v').textContent = st.et + '°';
@@ -182,11 +196,33 @@ function addSample(st) {
   const el = chargeAt == null ? 0 : samples[samples.length - 1].t - chargeAt;
   $('timer').querySelector('.v').textContent = `${Math.floor(el / 60)}:${String(Math.floor(el % 60)).padStart(2, '0')}`;
   draw();
+  autoDetect(st);
   if (window.onSample) onSample(st);
 }
 
-function mark(name) {
-  const s = samples[samples.length - 1]; if (!s) return;
+// 사람이 바쁜 순간 자동 표시: 투입(레버로 생두 넣으면 BT 급락), TP(최저점), 배출(배출구 열림 또는 크랙 후 BT 급락)
+// 1·2차 크랙은 소리로만 알 수 있어서 버튼으로 누른다
+function autoDetect(st) {
+  const s = samples.at(-1), back = samples.find(x => x.t >= s.t - 6);
+  if (!back) return;
+  const drop6 = back.bt - s.bt;
+  if (chargeAt == null && back.bt >= 120 && drop6 >= 8) {
+    // 급락 직전 최고점을 투입 시점으로
+    const peak = samples.filter(x => x.t >= s.t - 8).reduce((a, b) => b.bt >= a.bt ? b : a);
+    mark('투입', peak); log('투입 자동 감지'); return;
+  }
+  if (chargeAt == null) return;
+  const el = s.t - chargeAt;
+  if (!events.TP && el > 30 && el < 180) {
+    const recent = samples.filter(x => x.t >= s.t - 12);
+    const min = recent.reduce((a, b) => b.bt < a.bt ? b : a);
+    if (s.bt >= min.bt + 2 && min.t < s.t - 4) { events.TP = { t: min.t, bt: min.bt }; mark.refresh(); log('TP 자동 감지'); }
+  }
+  if (!events['배출'] && el > 120 && (st.drop || (events['1차 크랙'] && drop6 >= 10))) { mark('배출'); log('배출 자동 감지'); }
+}
+
+function mark(name, at) {
+  const s = at || samples[samples.length - 1]; if (!s) return;
   if (name === '투입') { chargeAt = s.t; $('phase').textContent = '로스팅 중'; }
   events[name] = { t: s.t, bt: s.bt };
   if (name === '1차 크랙') $('phase').textContent = '디벨롭';
@@ -196,9 +232,12 @@ function mark(name) {
     $('phase').textContent = `끝 · DTR ${dtr}%`;
   }
   if (window.onMark) onMark(name);
+  mark.refresh();
+}
+mark.refresh = () => {
   $('events').textContent = Object.entries(events).map(([k, v]) => `${k} ${v.bt}° @${fmt(v.t - (chargeAt ?? 0))}`).join(' · ');
   draw();
-}
+};
 const fmt = s => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
 
 function draw() {
@@ -219,8 +258,9 @@ function draw() {
     g.setLineDash([6, 6]); line('bt', css('--dim'), y, TARGET.map(p => ({ t: p.t + chargeAt, bt: p.bt }))); g.setLineDash([]);
   }
   line('burner', css('--burner'), v => y(v));
+  g.setLineDash([2, 4]); line('damper', '#6fbf9a', v => y(v)); g.setLineDash([]);
   line('et', css('--et')); line('bt', css('--bt'));
-  const rs = []; for (let i = 0; i < samples.length; i += 1) { const now = samples[i], old = samples.find(s => s.t >= now.t - 30); if (old && now.t - old.t >= 10) rs.push({ t: now.t, r: (now.bt - old.bt) / (now.t - old.t) * 60 }); }
+  const rs = []; for (let i = 0; i < samples.length; i++) { const r = ror('bt', i); if (r != null) rs.push({ t: samples[i].t, r }); }
   line('r', css('--ror'), yr, rs);
   g.fillStyle = css('--text');
   for (const [k, v] of Object.entries(events)) { g.strokeStyle = css('--dim'); g.setLineDash([4, 4]); g.beginPath(); g.moveTo(x(v.t), T); g.lineTo(x(v.t), T + h); g.stroke(); g.setLineDash([]); g.fillText(`${k} ${v.bt}°`, x(v.t) + 4, T + 12); }
@@ -247,13 +287,13 @@ async function connect() {
     }, 1000);
     $('state').textContent = dev.name + ' 연결됨';
     $('connect').disabled = true;
-    ['eCharge', 'e1C', 'eDrop'].forEach(i => $(i).disabled = false);
+    ['eCharge', 'e1C', 'e2C', 'eDrop'].forEach(i => $(i).disabled = false);
     log('연결됨: ' + dev.name);
   } catch (e) { $('state').textContent = '연결 실패'; log('연결 실패: ' + e.message); }
 }
 
 function saveCsv() {
-  const rows = ['t_sec,bt,et,burner', ...samples.map(s => [s.t.toFixed(1), s.bt, s.et, s.burner].join(','))];
+  const rows = ['t_sec,bt,et,burner,damper', ...samples.map(s => [s.t.toFixed(1), s.bt, s.et, s.burner, s.damper].join(','))];
   Object.entries(events).forEach(([k, v]) => rows.push(`# ${k},${v.t.toFixed(1)},${v.bt}`));
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['﻿' + rows.join('\n')], { type: 'text/csv' }));
@@ -264,9 +304,20 @@ function saveCsv() {
 $('connect').onclick = connect;
 $('eCharge').onclick = () => mark('투입');
 $('e1C').onclick = () => mark('1차 크랙');
+$('e2C').onclick = () => mark('2차 크랙');
 $('eDrop').onclick = () => mark('배출');
 $('swap').onclick = () => { swapped = !swapped; log('BT/ET 순서 바꿈'); };
 $('save').onclick = saveCsv;
+function setDamper(v) {
+  v = Math.max(0, Math.min(100, Math.round(+v))); if (isNaN(v)) return;
+  damper = v; $('damperNow').textContent = `댐퍼 ${v}%`;
+  const t = samples.at(-1)?.t ?? 0;
+  damperLog.push({ t, v });
+  if (chargeAt != null) log(`댐퍼 ${v}% (${fmt(t - chargeAt)})`);
+  draw();
+}
+document.querySelectorAll('#damperRow button').forEach(b => b.onclick = () => setDamper(b.dataset.d));
+$('damperIn').addEventListener('change', e => setDamper(e.target.value));
 addEventListener('resize', draw);
 // 화면 확인용 가짜 데이터: 주소 끝에 ?demo
 if (location.search.includes('demo')) {
