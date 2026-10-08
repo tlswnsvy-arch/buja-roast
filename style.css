@@ -205,3 +205,18 @@ button.go { background:linear-gradient(180deg, #3a9a4a, #2b7d39); border-color:#
 #cupForm .infob.open { background:rgba(255,216,138,.10); }
 .helpbox { margin-top:8px; padding:12px 14px; border-radius:12px; background:rgba(255,216,138,.07); border:1px solid rgba(255,216,138,.25); font-size:14.5px; line-height:1.7; }
 .helpbox b { color:var(--gold); }
+
+/* 레시피: 바뀐 값 표시 + 변경 기록 */
+.numwrap { display:inline-flex; flex-direction:column; align-items:center; vertical-align:middle; }
+.recnum.chg { border-color:#d9a441 !important; box-shadow:0 0 0 2px rgba(217,164,65,.25) !important; color:#ffd88a; }
+.aiorig { font-size:11px; color:var(--dim); margin-top:2px; }
+.chgnote { font-size:14px; color:#ffd88a; background:rgba(217,164,65,.10); border:1px solid rgba(217,164,65,.35); border-radius:10px; padding:8px 12px; }
+#verPanel { display:grid; gap:8px; margin-top:4px; }
+#verPanel[hidden] { display:none; }
+.ver { border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--card2); }
+.ver.cur { border-color:rgba(60,207,122,.6); background:rgba(60,207,122,.07); }
+.ver .vtop { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ver .vwhy { color:var(--dim); flex:1; }
+.ver .vnow { color:#9fe7b8; font-weight:700; font-size:14px; }
+.ver .vback { padding:6px 12px; font-size:14px; }
+.ver .vdiff { margin-top:4px; color:#ffd88a; font-size:14px; }

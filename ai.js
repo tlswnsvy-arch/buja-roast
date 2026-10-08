@@ -149,8 +149,9 @@ JSON으로만 답해라:
 "why":["이유 2~4개"],"watch":["로스팅 중 볼 것 2~4개(언제 무엇을 하면 되는지)"],"flavor":"예상되는 맛"}`;
     const r = await gemini([{ role: 'user', parts: [{ text: prompt }] }], { json: true, system: SYSTEM });
     autoSaveBean(true);
-    pushHistory('새 추천 받기 전');
+    pushHistory('AI 새 추천');
     lastRec = { ...r, bean: readBean(), at: new Date().toISOString() };
+    lastRec.orig = recSnap(lastRec);   // AI가 처음 추천한 값 (고친 칸 옆에 작게 보여줌)
     store.set('lastRec', lastRec);
     saveBeanProfile();
     renderRec();
@@ -168,10 +169,14 @@ function renderRec() {
   const r = lastRec; if (!r) return;
   const e = r.expected || {};
   const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-  const num = (k, v) => `<input class="recnum" data-k="${k}" type="number" value="${esc(v)}" style="width:64px;padding:4px 6px;display:inline-block">`;
+  const o = r.orig;
+  const origOf = k => { if (!o) return null; const m = k.match(/^s([0-9]+)(bt|burner)$/); return m ? o.steps?.[+m[1]]?.[m[2]] : o[k]; };
+  const num = (k, v) => { const ov = origOf(k), ch = ov != null && +ov !== +v;
+    return `<span class="numwrap"><input class="recnum${ch ? ' chg' : ''}" data-k="${k}" type="number" value="${esc(v)}" style="width:64px;padding:4px 6px;display:inline-block">${ch ? `<small class="aiorig">AI ${esc(ov)}</small>` : ''}</span>`; };
+  const changed = o && JSON.stringify(recSnap(r)) !== JSON.stringify(o);
   $('rec').style.whiteSpace = 'normal';
   const list = arr => (arr || []).length ? '<ul>' + arr.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '';
-  const hist = store.get('recHistory', []).length;
+  const hist = (store.get('recVersions', {})[$v('bName')] || []).length;
   // 읽기 쉽게: 요약 → 설정값(가장 중요) → 예상 → 접을 수 있는 설명 상자들
   $('rec').innerHTML = `
     <div class="recsec">
@@ -182,9 +187,11 @@ function renderRec() {
       ${r.approach && !/관점\s*[A-E]/.test(r.approach) ? `<div class="note">${esc(r.approach)}</div>` : ''}
     </div>
     <div class="recsec" style="border:1px solid #4a3d1d">
-      <div class="row"><div class="rech" style="flex:1">로스팅 설정값 ${r.edited ? '<span style="color:#d9a441;font-size:13px">· 고친 값</span>' : ''}</div><button class="say" data-say="settings" aria-label="읽어주기">🔊</button>
-        <button id="undoRec" ${hist ? '' : 'disabled'}>되돌리기${hist ? ' (' + hist + ')' : ''}</button></div>
+      <div class="row"><div class="rech" style="flex:1">로스팅 설정값</div><button class="say" data-say="settings" aria-label="읽어주기">🔊</button>
+        <button id="verBtn">🕘 변경 기록${hist > 1 ? ' (' + hist + ')' : ''}</button></div>
       <div class="note">숫자를 눌러 바로 고칠 수 있어요. 자동 로스팅이 이 값으로 볶아요.</div>
+      ${changed ? `<div class="chgnote row"><span style="flex:1">✏️ 금색 칸은 AI 추천에서 바뀐 값이에요. 칸 아래 작은 글씨가 AI가 처음 추천한 값이에요.</span><button id="toOrig">AI 추천값으로</button></div>` : (r.edited && !r.orig ? '<div class="chgnote">✏️ 예전에 직접 고친 값이 들어 있어요. 무엇이 바뀌었는지는 🕘 변경 기록에서 볼 수 있어요.</div>' : '')}
+      <div id="verPanel" hidden></div>
       <div class="steps">
         <span class="step">투입 ${num('charge', r.charge)}°C</span>
         <span class="step">시작 버너 ${num('startBurner', r.startBurner ?? 100)}%</span>
@@ -202,7 +209,11 @@ function renderRec() {
     <details class="recsec" open><summary class="rech">볶는 중 볼 것 <button class="say" data-say="watch" aria-label="읽어주기">🔊</button></summary>${list(r.watch)}</details>
     ${r.nextTry ? `<div class="recsec"><div class="row"><div class="rech" style="flex:1">다음 배치 실험</div><button class="say" data-say="next" aria-label="읽어주기">🔊</button></div><div>${esc(r.nextTry)}</div></div>` : ''}
     ${r.detail?.length ? `<details class="recsec" open><summary class="rech">자세한 설명 <button class="say" data-say="detail" aria-label="읽어주기">🔊</button></summary>${r.detail.map(d => `<div style="margin-top:8px"><b>${esc(d.title)}</b><div>${esc(d.text)}</div></div>`).join('')}</details>` : ''}`;
-  $('undoRec').onclick = undoRec;
+  if ($('toOrig')) $('toOrig').onclick = () => {
+    if (!confirm('AI가 처음 추천한 값으로 돌아갈까요?\n지금 값도 🕘 변경 기록에 남아요.')) return;
+    pushHistory('AI 추천값으로'); Object.assign(lastRec, JSON.parse(JSON.stringify(r.orig))); store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
+  };
+  $('verBtn').onclick = () => { const p = $('verPanel'); p.hidden = !p.hidden; if (!p.hidden) renderVersions(); };
   const steps = (r.steps || []).map(s => `원두 ${s.bt}도에서 버너 ${s.burner}퍼센트`).join(', ');
   const say = {
     summary: [clean(r.summary), r.level && `배전도는 ${r.level}.`].filter(Boolean).join(' '),
@@ -219,7 +230,7 @@ function renderRec() {
   $('readRec').onclick = () => read(['summary', 'settings', 'flavor', 'watch', 'next'].map(k => say[k]).filter(Boolean).join(' '));
   $('rec').querySelectorAll('.recnum').forEach(inp => inp.addEventListener('change', () => {
     const k = inp.dataset.k, v = +inp.value; if (!isFinite(v)) return;
-    pushHistory('숫자 고침');
+    pushHistory('직접 고침');
     const m = k.match(/^s(\d+)(bt|burner)$/);
     if (m) lastRec.steps[+m[1]][m[2]] = v; else lastRec[k] = v;
     lastRec.edited = true; store.set('lastRec', lastRec); saveBeanProfile(); renderRec(); log('추천값 고침: ' + k + ' = ' + v);
@@ -242,16 +253,79 @@ function renderRec() {
   }
 }
 
-// 되돌리기: 추천값이 바뀌기 직전 모습을 쌓아 두고 한 단계씩 되돌린다
+// 레시피 변경 기록: 생두마다 따로, 바뀔 때마다 그 모습을 남긴다 (지우지 않음)
+// 예전 '되돌리기'는 생두 구분 없이 한 줄로 쌓여서, 다른 생두 레시피로 돌아가 버리는 버그가 있었다 (2026-10-09)
+const recSnap = r => ({ charge: r.charge, startBurner: r.startBurner ?? 100, drop: r.drop, rise: r.rise ?? 8, dtSec: r.dtSec ?? 60, steps: (r.steps || []).map(x => ({ bt: x.bt, burner: x.burner })) });
+let pendingWhy = '';
+// 바꾸기 직전에 부른다: 왜 바뀌는지 기억하고, 기록이 비어 있으면 지금 모습을 첫 기록으로
 function pushHistory(why) {
-  if (!lastRec) return;
-  const h = store.get('recHistory', []); h.push({ why, rec: JSON.parse(JSON.stringify(lastRec)) }); store.set('recHistory', h.slice(-30));
+  pendingWhy = why;
+  const name = $v('bName'); if (!name || !lastRec) return;
+  const all = store.get('recVersions', {});
+  if (!all[name]?.length) { all[name] = [{ at: lastRec.at || new Date().toISOString(), why: '처음 레시피', rec: JSON.parse(JSON.stringify(lastRec)) }]; store.set('recVersions', all); }
 }
-function undoRec() {
-  const h = store.get('recHistory', []), last = h.pop(); if (!last) return log('되돌릴 게 없어요');
-  store.set('recHistory', h); lastRec = last.rec; store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
-  log('되돌림: ' + last.why);
+// 저장할 때 값이 바뀌었으면 기록에 한 줄 추가
+function addVersion() {
+  const name = $v('bName'); if (!name || !lastRec) return;
+  const all = store.get('recVersions', {}), list = all[name] || [];
+  const prev = list.at(-1);
+  if (prev && JSON.stringify(recSnap(prev.rec)) === JSON.stringify(recSnap(lastRec))) { prev.rec = JSON.parse(JSON.stringify(lastRec)); }   // 설명만 바뀐 경우
+  else list.push({ at: new Date().toISOString(), why: pendingWhy || '바뀜', rec: JSON.parse(JSON.stringify(lastRec)) });
+  pendingWhy = '';
+  all[name] = list.slice(-40); store.set('recVersions', all);
 }
+// 두 레시피의 다른 점을 사람이 읽는 말로
+function recDiff(a, b) {
+  if (!a) return '';
+  const A = recSnap(a), B = recSnap(b), out = [];
+  const names = { charge: ['투입', '°'], startBurner: ['시작 버너', '%'], drop: ['배출', '°'], rise: ['크랙 뒤 상승', '°'], dtSec: ['DT', '초'] };
+  for (const [k, [n, u]] of Object.entries(names)) if (A[k] !== B[k]) out.push(`${n} ${A[k]}${u}→${B[k]}${u}`);
+  if (JSON.stringify(A.steps) !== JSON.stringify(B.steps)) {
+    const n = Math.max(A.steps.length, B.steps.length);
+    for (let i = 0; i < n; i++) {
+      const x = A.steps[i], y = B.steps[i];
+      if (JSON.stringify(x) === JSON.stringify(y)) continue;
+      out.push(`버너 단계${i + 1} ${x ? x.bt + '°→' + x.burner + '%' : '없음'} ⇒ ${y ? y.bt + '°→' + y.burner + '%' : '없음'}`);
+    }
+  }
+  return out.join(' · ');
+}
+function renderVersions() {
+  const name = $v('bName'), list = store.get('recVersions', {})[name] || [];
+  const esc = t => String(t ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const when = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  const cur = JSON.stringify(recSnap(lastRec));
+  if (!list.length) { $('verPanel').innerHTML = '<div class="note">아직 바뀐 기록이 없어요.</div>'; return; }
+  $('verPanel').innerHTML = `<div class="note">"${esc(name)}" 레시피가 바뀐 순서예요. 위가 최신이에요. 어느 버전으로든 돌아갈 수 있고, 돌아가도 기록은 지워지지 않아요.</div>` +
+    list.map((v, i) => [v, i]).reverse().map(([v, i]) => {
+      const isCur = JSON.stringify(recSnap(v.rec)) === cur;
+      const d = recDiff(list[i - 1]?.rec, v.rec);
+      const sum = recSnap(v.rec);
+      return `<div class="ver${isCur ? ' cur' : ''}">
+        <div class="vtop"><b>${when(v.at)}</b> <span class="vwhy">${esc(v.why)}</span>${isCur ? '<span class="vnow">지금 쓰는 중</span>' : `<button class="vback" data-i="${i}">이 버전으로</button>`}</div>
+        ${d ? `<div class="vdiff">${esc(d)}</div>` : ''}
+        <div class="note">투입 ${sum.charge}° · 시작 ${sum.startBurner}% · ${sum.steps.map(x => x.bt + '°→' + x.burner + '%').join(' · ')} · 배출 ${sum.drop}° · +${sum.rise}° / ${sum.dtSec}초</div>
+      </div>`; }).join('');
+  $('verPanel').querySelectorAll('.vback').forEach(b => b.onclick = () => {
+    const v = list[+b.dataset.i];
+    if (!confirm(`${when(v.at)} 레시피로 돌아갈까요?\n지금 레시피도 기록에 남아 있어서 언제든 다시 돌아올 수 있어요.`)) return;
+    pushHistory(`되돌림 (${when(v.at)} 버전으로)`);
+    lastRec = JSON.parse(JSON.stringify(v.rec)); store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
+    $('verPanel').hidden = false; renderVersions();
+  });
+}
+// 처음 한 번: 생두별 저장 레시피를 각자의 첫 기록으로 (예전 공용 되돌리기 기록은 쓰지 않음)
+(() => {
+  const all = store.get('recVersions', {}), profs = store.get('beanProfiles', {});
+  let changed = false;
+  for (const [n, p] of Object.entries(profs)) {
+    // 고친 적 없는 레시피는 지금 값이 곧 AI 추천값
+    if (!p.orig && !p.edited) { p.orig = recSnap(p); changed = true; }
+    if (!all[n]?.length) { all[n] = [{ at: p.at || new Date().toISOString(), why: '기존 레시피', rec: p }]; changed = true; }
+  }
+  if (changed) { store.set('recVersions', all); store.set('beanProfiles', profs); }
+  if (lastRec && !lastRec.orig && !lastRec.edited) { lastRec.orig = recSnap(lastRec); store.set('lastRec', lastRec); }
+})();
 
 // 레시피를 단계별로 풀어 설명 (초보가 왜 이렇게 볶는지 이해하도록). 한 번 받으면 레시피에 저장
 async function explainRec() {
@@ -307,6 +381,7 @@ ${wxText()}
 function saveBeanProfile() {
   const name = $v('bName'); if (!name || !lastRec) return;
   const all = store.get('beanProfiles', {}); all[name] = lastRec; store.set('beanProfiles', all);
+  addVersion();
   if (typeof renderBeans === 'function') renderBeans();
 }
 
@@ -363,6 +438,7 @@ patch에 쓸 수 있는 키: charge, startBurner, steps(전체 배열 [{bt,burne
       b.addEventListener('click', () => {
         const c = r.changes[+b.dataset.apply];
         if (before) {
+          pushHistory('리뷰 적용 취소: ' + c.label);
           Object.assign(lastRec, JSON.parse(JSON.stringify(before)));
           store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
           before = null; b.textContent = '적용'; b.style.background = '';
@@ -371,7 +447,7 @@ patch에 쓸 수 있는 키: charge, startBurner, steps(전체 배열 [{bt,burne
         const p = c.patch || {}, ok = {};
         for (const k of ['charge', 'startBurner', 'drop', 'rise', 'dtSec']) if (isFinite(+p[k]) && p[k] !== '' && p[k] != null) ok[k] = +p[k];
         if (Array.isArray(p.steps) && p.steps.every(x => isFinite(+x.bt) && isFinite(+x.burner))) ok.steps = p.steps.map(x => ({ bt: +x.bt, burner: Math.max(0, Math.min(100, +x.burner)) }));
-        pushHistory('적용: ' + c.label);
+        pushHistory('리뷰 적용: ' + c.label);
         before = JSON.parse(JSON.stringify(Object.fromEntries(Object.keys(ok).map(k => [k, lastRec[k]]))));
         Object.assign(lastRec, ok, { edited: true, lastChange: c.label });
         store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
@@ -437,7 +513,7 @@ async function ask(q) {
         const note = document.createElement('span'); note.className = 'note'; note.textContent = desc;
         let before = null;
         b.onclick = () => {
-          if (before) { Object.assign(lastRec, before); before = null; b.textContent = '이대로 레시피에 적용'; }
+          if (before) { pushHistory('AI 질문 적용 취소'); Object.assign(lastRec, before); before = null; b.textContent = '이대로 레시피에 적용'; }
           else { pushHistory('AI 질문 적용'); before = JSON.parse(JSON.stringify(Object.fromEntries(Object.keys(ok).map(k => [k, lastRec[k]])))); Object.assign(lastRec, JSON.parse(JSON.stringify(ok)), { edited: true }); b.textContent = '적용됨 · 다시 누르면 취소'; }
           store.set('lastRec', lastRec); saveBeanProfile(); renderRec(); log('AI 질문 → 레시피: ' + desc);
         };
