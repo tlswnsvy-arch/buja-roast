@@ -336,10 +336,15 @@ function draw() {
   const x = t => L + (t - tMin) / (tMax - tMin) * w, y = v => T + h - v / 250 * h, yr = v => T + h - Math.max(-2, Math.min(52, v)) / 50 * h;
   const fmtT = s => `${s < 0 ? '-' : ''}${Math.floor(Math.abs(s) / 60)}:${String(Math.floor(Math.abs(s) % 60)).padStart(2, '0')}`;
 
-  // 눈금: 온도 25도마다 가는 선, 50도마다 숫자 / 1분마다 세로선
+  // 눈금: 온도 10도마다 가는 선, 25도마다 숫자 (RoR은 5마다) / 30초마다 세로선, 1분은 진하게
   g.font = '11px sans-serif'; g.lineWidth = 1;
-  for (let v = 0; v <= 250; v += 25) { g.strokeStyle = v % 50 ? 'rgba(255,255,255,.04)' : C.line; g.beginPath(); g.moveTo(L, y(v)); g.lineTo(W - R, y(v)); g.stroke(); if (v % 50 === 0) { g.fillStyle = C.dim; g.fillText(v, 8, y(v) + 4); g.fillText(v / 5, W - R + 8, y(v) + 4); } }
-  for (let t = 0; t <= tMax; t += 60) { g.strokeStyle = 'rgba(255,255,255,.05)'; g.beginPath(); g.moveTo(x(t), T); g.lineTo(x(t), T + h); g.stroke(); g.fillStyle = C.dim; g.fillText(t / 60, x(t) - 3, T + h + 14); }
+  for (let v = 0; v <= 250; v += 10) { g.strokeStyle = v % 50 === 0 ? C.line : 'rgba(255,255,255,.035)'; g.beginPath(); g.moveTo(L, y(v)); g.lineTo(W - R, y(v)); g.stroke(); }
+  for (let v = 0; v <= 250; v += 25) { g.strokeStyle = 'rgba(255,255,255,.07)'; g.beginPath(); g.moveTo(L, y(v)); g.lineTo(W - R, y(v)); g.stroke(); g.fillStyle = C.dim; g.fillText(v, 8, y(v) + 4); g.fillText(v / 5, W - R + 8, y(v) + 4); }
+  for (let t = Math.ceil(tMin / 30) * 30; t <= tMax; t += 30) {
+    const major = t % 60 === 0; g.strokeStyle = major ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.035)';
+    g.beginPath(); g.moveTo(x(t), T); g.lineTo(x(t), T + h); g.stroke();
+    if (t >= 0) { g.fillStyle = C.dim; g.fillText(fmtT(t), x(t) - 11, T + h + 14); }
+  }
   g.fillStyle = C.dim; g.fillText('°C', 8, T - 8); g.fillText('RoR', W - R + 4, T - 8); g.fillText('분', W - R + 8, T + h + 14);
 
   // 범례
