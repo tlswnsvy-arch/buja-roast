@@ -104,7 +104,8 @@
       <label>가공 방식<select id="bProcess"><option>워시드</option><option>내추럴</option><option>허니</option><option>무산소(애너로빅)</option><option>기타</option></select></label>
       <label>수분 % (모르면 비워두기)<input id="bMoist" inputmode="decimal" placeholder="예: 10.5"></label>
       <label>투입량 g<input id="bAmt" inputmode="numeric" value="300"></label>
-      <label>원하는 배전도<select id="bLevel"><option>라이트</option><option selected>미디엄 라이트</option><option>미디엄</option><option>미디엄 다크</option><option>다크</option></select></label>
+      <label>배전도<select id="bLevel"><option selected>AI가 정하기</option><option>라이트</option><option>미디엄 라이트</option><option>미디엄</option><option>미디엄 다크</option><option>다크</option></select></label>
+      <label>마시는 방법<select id="bBrew"><option selected>핸드드립(필터)</option><option>에스프레소·라떼</option><option>둘 다</option></select></label>
     </div>
     <div class="chips" id="tasteChips"></div>
     <label>원하는 맛 (위 버튼을 누르거나 직접 쓰기)<textarea id="bTaste" placeholder="예: 꽃향 많이, 산미는 부드럽게, 단맛 밸런스, 크리미한 질감"></textarea></label>
@@ -341,6 +342,6 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js"></script>
+<script src="ai.js?v=7"></script>
 </body>
 </html>

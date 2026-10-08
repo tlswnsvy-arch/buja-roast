@@ -69,15 +69,18 @@ async function gemini(contents, { json = false, system = '' } = {}) {
   let lastErr;
   for (const m of MODELS) {
     try {
+      // 모델이 응답 없이 걸려 있으면 40초 뒤 다음 모델로
+      const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 40000);
+      if ($('rec').textContent.includes('짜는 중')) $('rec').textContent = `AI(${m})가 생두와 기록을 보고 프로파일을 짜는 중...`;
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body),
-      });
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body), signal: ctl.signal,
+      }).finally(() => clearTimeout(timer));
       if (!r.ok) { lastErr = new Error(`${m} ${r.status}`); if ([404, 429, 500, 503].includes(r.status)) continue; throw lastErr; }
       const j = await r.json();
       const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
       log('AI 모델: ' + m);
       return json ? JSON.parse(text.replace(/^```json\s*|```$/g, '')) : text;
-    } catch (e) { lastErr = e; if (!/\b(404|429|500|503)\b|Failed to fetch/.test(e.message)) break; }
+    } catch (e) { lastErr = e; if (!/\b(404|429|500|503)\b|Failed to fetch|abort/i.test(e.message)) break; }
   }
   throw lastErr;
 }
@@ -117,7 +120,7 @@ function refText() {
 }
 
 function beanText() {
-  return `생두: ${$v('bName') || '(이름 없음)'} / 산지·품종: ${$v('bOrigin') || '-'} / 가공: ${$v('bProcess')} / 수분: ${$v('bMoist') || '모름'}% / 투입량: ${$v('bAmt') || '300'}g / 원하는 배전도: ${$v('bLevel')} / 원하는 맛: ${$v('bTaste') || '-'}`;
+  return `생두: ${$v('bName') || '(이름 없음)'} / 산지·품종: ${$v('bOrigin') || '-'} / 가공: ${$v('bProcess')} / 수분: ${$v('bMoist') || '모름'}% / 투입량: ${$v('bAmt') || '300'}g / 배전도: ${$v('bLevel') === 'AI가 정하기' ? 'AI가 정해줘(생두 특성과 원하는 맛, 마시는 방법을 보고 고수들이 이 생두에 가장 많이 권하는 배전도로)' : $v('bLevel') + '(사용자가 직접 고름)'} / 마시는 방법: ${$v('bBrew')} / 원하는 맛: ${$v('bTaste') || '-'}`;
 }
 const wxText = () => WX ? `오늘 날씨(${WX.where}): ${WX.temp}°C, 습도 ${WX.rh}%, 기압 ${WX.hpa}hPa` : '날씨 정보 없음';
 
@@ -137,7 +140,7 @@ ${historyText()}
 
 이 생두를 부자 앱 "프로파일 설정 모드"에 바로 입력할 수 있게 추천해라. 먼저 고수 관점 A~E 중 이 생두와 원하는 맛에 가장 맞는 접근을 골라라(섞어도 됨). 그다음 목표가 향미 보존형인지 내부 완성형인지 → 전체 속도(빠름/기준/느림) → DT → 1차 크랙 뒤 상승폭을 정해라. 그다음 B30s ${$v('bAmt') || 300}g에 맞게 투입 온도와 시간을 보정해라. 버너 단계는 2~5개, 전기 히터 지연을 감안해 미리 줄여라. 배출 온도 = 예상 1차 크랙 온도 + 상승폭.
 JSON으로만 답해라:
-{"summary":"한두 문장 요약","approach":"고른 고수 관점과 이유 한 줄","type":"향미 보존형 또는 내부 완성형","speed":"빠름|기준|느림","dtSec":목표DT초,"rise":1차크랙뒤상승폭숫자,
+{"summary":"한두 문장 요약","level":"정한 배전도","levelWhy":"그 배전도를 고른 이유 한 줄(사용자가 직접 골랐으면 그 배전도가 이 생두에 맞는지 한마디)","approach":"고른 고수 관점과 이유 한 줄","type":"향미 보존형 또는 내부 완성형","speed":"빠름|기준|느림","dtSec":목표DT초,"rise":1차크랙뒤상승폭숫자,
 "charge":투입온도,"startBurner":시작버너%,"damper":"댐퍼 개방 % 추천(예: 처음 50 → 1차 크랙 전 100)","steps":[{"bt":온도,"burner":%}],"drop":배출온도,
 "expected":{"tpSec":초,"tpTemp":온도,"fcSec":초,"fcTemp":온도,"dropSec":초},"dtr":목표DTR%,"nextTry":"이번 결과를 커핑한 뒤 다음 배치에서 바꿔볼 한 가지",
 "why":["이유 2~4개"],"watch":["로스팅 중 볼 것 2~4개(언제 무엇을 하면 되는지)"],"flavor":"예상되는 맛"}`;
@@ -149,7 +152,7 @@ JSON으로만 답해라:
   btn.disabled = false;
 }
 
-const readBean = () => ({ name: $v('bName'), origin: $v('bOrigin'), process: $v('bProcess'), moist: $v('bMoist'), amt: $v('bAmt'), level: $v('bLevel'), taste: $v('bTaste') });
+const readBean = () => ({ name: $v('bName'), origin: $v('bOrigin'), process: $v('bProcess'), moist: $v('bMoist'), amt: $v('bAmt'), level: $v('bLevel'), brew: $v('bBrew'), taste: $v('bTaste') });
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
 function renderRec() {
@@ -159,6 +162,7 @@ function renderRec() {
   $('rec').style.whiteSpace = 'normal';
   $('rec').innerHTML = `
     <div>${esc(r.summary)}</div>
+    ${r.level ? `<div style="margin-top:6px">배전도: ${esc(r.level)}${r.levelWhy ? ' · ' + esc(r.levelWhy) : ''}</div>` : ''}
     ${r.speed ? `<div class="steps">${r.approach ? `<span class="step">${esc(r.approach)}</span>` : ''}<span class="step">${esc(r.type)}</span><span class="step">속도 ${esc(r.speed)}</span><span class="step">DT ${esc(r.dtSec)}초</span><span class="step">1차 크랙 뒤 +${esc(r.rise)}도</span></div>` : ''}
     <div class="note" style="margin-top:8px">부자 앱 프로파일 설정 모드에 이렇게 넣으세요</div>
     <div class="steps">
@@ -305,13 +309,15 @@ $('histFile').onchange = async e => {
   } catch (err) { $('histInfo').textContent = '불러오기 실패: ' + err.message; }
 };
 { const n = store.get('myHistory', []).length; if (n) $('histInfo').textContent = `기록 ${n}개 있음`; }
+// 배전도 기본값이 'AI가 정하기'로 바뀌었으니 예전에 저장된 배전도는 한 번 지운다
+if (!store.get('levelV2', false)) { try { localStorage.removeItem('bean_bLevel'); } catch {} store.set('levelV2', true); }
 // 입력한 생두 정보 기억
-['bName', 'bOrigin', 'bProcess', 'bMoist', 'bAmt', 'bLevel', 'bTaste'].forEach(id => {
+['bName', 'bOrigin', 'bProcess', 'bMoist', 'bAmt', 'bLevel', 'bBrew', 'bTaste'].forEach(id => {
   const saved = store.get('bean_' + id, null); if (saved != null) $(id).value = saved;
   $(id).addEventListener('change', () => store.set('bean_' + id, $(id).value));
 });
 // ---------- 생두 목록 ----------
-const BEAN_FIELDS = { name: 'bName', origin: 'bOrigin', process: 'bProcess', moist: 'bMoist', amt: 'bAmt', level: 'bLevel', taste: 'bTaste' };
+const BEAN_FIELDS = { name: 'bName', origin: 'bOrigin', process: 'bProcess', moist: 'bMoist', amt: 'bAmt', level: 'bLevel', brew: 'bBrew', taste: 'bTaste' };
 const PROCESSES = ['워시드', '내추럴', '허니', '무산소(애너로빅)'];
 function guessBean(name) {
   // 기록 이름에서 산지·가공을 대충 추정 (예: "파나마 라 후이카 옐로우 카투아이 내추럴")
