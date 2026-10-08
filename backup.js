@@ -6,13 +6,40 @@
   const snapshot = () => { const data = {}; for (const k of Object.keys(localStorage)) if (!SKIP.includes(k)) data[k] = localStorage.getItem(k); return data; };
   const count = data => { try { return JSON.parse(data.myRoasts || '[]').length; } catch { return 0; } };
 
-  $('backupSave').onclick = () => {
+  // 백업 파일 만들기 (저장·공유 공용)
+  const makeFile = () => {
     try { localStorage.setItem('lastBackup', new Date().toISOString()); } catch {}
     const data = snapshot();
-    const blob = new Blob([JSON.stringify({ app: 'buja-ai-roasting', version: 1, savedAt: new Date().toISOString(), data }, null, 1)], { type: 'application/json' });
+    const text = JSON.stringify({ app: 'buja-ai-roasting', version: 1, savedAt: new Date().toISOString(), data }, null, 1);
+    return { data, name: `부자AI로스팅_백업_${stamp()}.json`, blob: new Blob([text], { type: 'application/json' }) };
+  };
+  const download = (quiet) => {
+    const { data, name, blob } = makeFile();
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = `부자AI로스팅_백업_${stamp()}.json`; a.click();
-    $('backupInfo').textContent = `배치 ${count(data)}개를 백업 파일로 저장했어요. 다운로드 폴더에 있어요.`;
+    a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    $('backupInfo').textContent = `${quiet ? '자동 백업: ' : ''}배치 ${count(data)}개를 태블릿 다운로드 폴더에 저장했어요.`;
+  };
+  $('backupSave').onclick = () => download(false);
+
+  // 공유로 보내기: 구글 드라이브, 카톡 나에게, 메일 등 고르면 PC 없이 태블릿 밖에 보관된다
+  $('backupShare').onclick = async () => {
+    const { data, name, blob } = makeFile();
+    const file = new File([blob], name, { type: 'application/json' });
+    if (!navigator.canShare?.({ files: [file] })) return download(false);
+    try {
+      await navigator.share({ files: [file], title: name });
+      $('backupInfo').textContent = `배치 ${count(data)}개 백업을 보냈어요.`;
+    } catch (e) { if (e.name !== 'AbortError') $('backupInfo').textContent = '보내기 실패: ' + e.message; }
+  };
+
+  // 배출하고 기록이 저장되면 자동으로 태블릿 다운로드 폴더에 백업 (크롬 데이터를 지워도 남는다)
+  const autoOn = () => { try { return localStorage.getItem('autoBackup') !== 'off'; } catch { return true; } };
+  $('autoBackup').checked = autoOn();
+  $('autoBackup').onchange = e => { try { localStorage.setItem('autoBackup', e.target.checked ? 'on' : 'off'); } catch {} };
+  const origMark = window.onMark;
+  window.onMark = async name => {
+    await origMark?.(name);
+    if (name === '배출' && autoOn()) setTimeout(() => { try { download(true); } catch {} }, 3000);
   };
 
   $('backupLoad').onchange = async e => {
