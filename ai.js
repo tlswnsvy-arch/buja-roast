@@ -128,7 +128,8 @@ const wxText = () => WX ? `오늘 날씨(${WX.where}): ${WX.temp}°C, 습도 ${W
 
 const SYSTEM = `너는 스페셜티 커피 로스팅 전문가이자 사용자의 로스팅 코치다. 사용자는 홈로스터로 부자로스터 B30s를 쓴다.
 목표 맛과 곡선은 아래 여러 고수 관점(A~E) 중 이 생두와 목표에 가장 맞는 것을 골라 정하고(부자 가이드를 무조건 따르지 말 것), 이 기계의 반응(시간·온도·지연)으로 숫자를 맞춰라. 사용자는 초보라서 사용자 기록의 맛 결과를 목표로 삼지 말고, 기계 반응 확인과 실수 피하기에만 써라. 사용자가 저장한 고수 참고 프로파일이 있으면 그것도 참고해라.${LEARNED}
-답은 한국어로, 짧고 실용적으로. 숫자는 구체적으로. 굵은 글씨(**)와 표는 쓰지 마라.`;
+답은 한국어로, 짧고 실용적으로. 숫자는 구체적으로. 굵은 글씨(**)와 표는 쓰지 마라.
+사용자에게 보이는 글(요약, 이유 등)에는 '관점 A', '고수 관점 B' 같은 내부 이름을 쓰지 마라. 필요하면 '부자로스터 가이드 방식', '스캇 라오 방식', '북유럽 라이트 방식', '롭 후스 방식'처럼 자연스럽게 말해라.`;
 
 // ---------- 프로파일 추천 ----------
 async function recommend() {
@@ -160,6 +161,9 @@ JSON으로만 답해라:
 const readBean = () => ({ name: $v('bName'), origin: $v('bOrigin'), process: $v('bProcess'), moist: $v('bMoist'), amt: $v('bAmt'), level: $v('bLevel'), brew: $v('bBrew'), taste: $v('bTaste') });
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
+// 예전 추천에 남은 내부 이름('고수 관점 A와 B를 결합하여')을 화면·음성에서 뺀다
+const clean = t => String(t || '').replace(/(고수\s*)?관점\s*[A-E](\s*(와|과|,|및)\s*[A-E])*(\s*(를|을|의))?\s*(결합하여|혼합하여|섞어)?\s*/g, '');
+
 function renderRec() {
   const r = lastRec; if (!r) return;
   const e = r.expected || {};
@@ -171,14 +175,14 @@ function renderRec() {
   // 읽기 쉽게: 요약 → 설정값(가장 중요) → 예상 → 접을 수 있는 설명 상자들
   $('rec').innerHTML = `
     <div class="recsec">
-      <div class="row"><div class="rech" style="flex:1">요약</div><button id="readRec">🔊 읽어주기</button></div>
-      <div>${esc(r.summary)}</div>
+      <div class="row"><div class="rech" style="flex:1">요약</div><button class="say" data-say="summary" aria-label="읽어주기">🔊</button><button id="readRec">🔊 전체</button></div>
+      <div>${esc(clean(r.summary))}</div>
       ${r.level ? `<div class="recline"><b>배전도</b> ${esc(r.level)}${r.levelWhy ? `<div class="note">${esc(r.levelWhy)}</div>` : ''}</div>` : ''}
       ${r.speed ? `<div class="steps"><span class="step">${esc(r.type)}</span><span class="step">속도 ${esc(r.speed)}</span><span class="step">DT ${esc(r.dtSec)}초</span><span class="step">1차 크랙 뒤 +${esc(r.rise)}도</span></div>` : ''}
-      ${r.approach ? `<div class="note">${esc(r.approach)}</div>` : ''}
+      ${r.approach && !/관점\s*[A-E]/.test(r.approach) ? `<div class="note">${esc(r.approach)}</div>` : ''}
     </div>
     <div class="recsec" style="border:1px solid #4a3d1d">
-      <div class="row"><div class="rech" style="flex:1">로스팅 설정값 ${r.edited ? '<span style="color:#d9a441;font-size:13px">· 고친 값</span>' : ''}</div>
+      <div class="row"><div class="rech" style="flex:1">로스팅 설정값 ${r.edited ? '<span style="color:#d9a441;font-size:13px">· 고친 값</span>' : ''}</div><button class="say" data-say="settings" aria-label="읽어주기">🔊</button>
         <button id="undoRec" ${hist ? '' : 'disabled'}>되돌리기${hist ? ' (' + hist + ')' : ''}</button></div>
       <div class="note">숫자를 눌러 바로 고칠 수 있어요. 자동 로스팅이 이 값으로 볶아요.</div>
       <div class="steps">
@@ -193,19 +197,23 @@ function renderRec() {
       ${r.damper ? `<div class="recline"><b>댐퍼</b> ${esc(r.damper)}</div>` : ''}
       <div class="recline"><b>예상</b> TP ${e.tpSec ? mmss(e.tpSec) : '-'} · 1차 크랙 ${e.fcTemp || '-'}°C ${e.fcSec ? mmss(e.fcSec) : '-'} · 배출 ${e.dropSec ? mmss(e.dropSec) : '-'} · DTR ${esc(r.dtr)}%</div>
     </div>
-    ${r.flavor ? `<div class="recsec"><div class="rech">예상 맛</div><div>${esc(r.flavor)}</div></div>` : ''}
-    <details class="recsec"><summary class="rech">왜 이렇게 정했나요?</summary>${list(r.why)}</details>
-    <details class="recsec" open><summary class="rech">볶는 중 볼 것</summary>${list(r.watch)}</details>
-    ${r.nextTry ? `<div class="recsec"><div class="rech">다음 배치 실험</div><div>${esc(r.nextTry)}</div></div>` : ''}`;
+    ${r.flavor ? `<div class="recsec"><div class="row"><div class="rech" style="flex:1">예상 맛</div><button class="say" data-say="flavor" aria-label="읽어주기">🔊</button></div><div>${esc(r.flavor)}</div></div>` : ''}
+    <details class="recsec"><summary class="rech">왜 이렇게 정했나요? <button class="say" data-say="why" aria-label="읽어주기">🔊</button></summary>${list(r.why)}</details>
+    <details class="recsec" open><summary class="rech">볶는 중 볼 것 <button class="say" data-say="watch" aria-label="읽어주기">🔊</button></summary>${list(r.watch)}</details>
+    ${r.nextTry ? `<div class="recsec"><div class="row"><div class="rech" style="flex:1">다음 배치 실험</div><button class="say" data-say="next" aria-label="읽어주기">🔊</button></div><div>${esc(r.nextTry)}</div></div>` : ''}`;
   $('undoRec').onclick = undoRec;
-  $('readRec').onclick = () => {
-    ALARM.unlock(); ALARM.stopSpeaking?.();
-    const steps = (r.steps || []).map(s => `원두 ${s.bt}도에서 버너 ${s.burner}퍼센트`).join(', ');
-    const parts = [r.summary, r.level && `배전도는 ${r.level}.`,
-      `투입 ${r.charge}도, 시작 버너 ${r.startBurner ?? 100}퍼센트. ${steps}. 1차 크랙 뒤 ${r.rise ?? 8}도 올리고, 디벨롭 ${r.dtSec ?? 60}초.`,
-      r.watch?.length && '볶는 중 볼 것. ' + r.watch.join('. ') + '.', r.nextTry && '다음 배치 실험. ' + r.nextTry];
-    ALARM.speak(parts.filter(Boolean).join(' '));
+  const steps = (r.steps || []).map(s => `원두 ${s.bt}도에서 버너 ${s.burner}퍼센트`).join(', ');
+  const say = {
+    summary: [clean(r.summary), r.level && `배전도는 ${r.level}.`].filter(Boolean).join(' '),
+    settings: `투입 ${r.charge}도, 시작 버너 ${r.startBurner ?? 100}퍼센트. ${steps}. 1차 크랙 뒤 ${r.rise ?? 8}도 올리고, 디벨롭 ${r.dtSec ?? 60}초. 배출 ${r.drop}도.`,
+    flavor: r.flavor && '예상 맛은 ' + r.flavor + '.',
+    why: r.why?.length && '이렇게 정한 이유. ' + r.why.join('. ') + '.',
+    watch: r.watch?.length && '볶는 중 볼 것. ' + r.watch.join('. ') + '.',
+    next: r.nextTry && '다음 배치 실험. ' + r.nextTry,
   };
+  const read = text => { ALARM.unlock(); ALARM.stopSpeaking?.(); if (text) ALARM.speak(text); };
+  $('rec').querySelectorAll('.say').forEach(b => b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); read(say[b.dataset.say]); }));
+  $('readRec').onclick = () => read(['summary', 'settings', 'flavor', 'watch', 'next'].map(k => say[k]).filter(Boolean).join(' '));
   $('rec').querySelectorAll('.recnum').forEach(inp => inp.addEventListener('change', () => {
     const k = inp.dataset.k, v = +inp.value; if (!isFinite(v)) return;
     pushHistory('숫자 고침');

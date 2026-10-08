@@ -102,3 +102,7 @@ details[open].recsec > summary::before { content:'▾ '; }
   .tiles { grid-template-columns:repeat(2,1fr); }
   .tile .v { font-size:28px; }
 }
+
+/* 상자별 읽어주기 버튼 */
+button.say { padding:4px 10px; font-size:15px; border-radius:10px; background:var(--card); }
+.rech button.say { margin-left:8px; vertical-align:middle; }

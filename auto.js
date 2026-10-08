@@ -22,7 +22,7 @@ window.ALARM = (() => {
   // AI 목소리는 순서대로 읽고(겹치지 않게), 같은 문장은 기억해 두었다가 바로 다시 쓴다. 안 되면 기기 음성으로
   const TTS_MODELS = ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts', 'gemini-2.5-flash-preview-tts'];
   const cache = new Map();
-  let queue = Promise.resolve(), current = null;
+  let queue = Promise.resolve(), current = null, gen = 0;   // gen: 멈추면 올라가서, 그 전에 줄 서 있던 소리는 버린다
   const pref = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
   async function aiAudio(text) {
     if (cache.has(text)) return cache.get(text);
@@ -58,15 +58,33 @@ window.ALARM = (() => {
   function play(buf) {
     return new Promise(res => { const s = ctx.createBufferSource(); s.buffer = buf; s.connect(ctx.destination); s.onended = res; current = s; s.start(); });
   }
+  // 긴 글은 문장 단위(약 120자)로 나눠서, 첫 문장을 바로 읽는 동안 다음 문장을 미리 만든다
+  function chunks(text) {
+    const out = []; let cur = '';
+    for (const s of String(text).split(/(?<=[.!?。])\s+/)) {
+      if (cur && (cur + ' ' + s).length > 120) { out.push(cur); cur = s; } else cur = cur ? cur + ' ' + s : s;
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
   function speak(text) {
     if (pref('voiceMode', 'ai') === 'ai') {
       unlock();
-      queue = queue.then(() => aiAudio(text).then(play)).catch(() => deviceSpeak(text));
+      const my = gen, parts = chunks(text);
+      queue = queue.then(async () => {
+        let next = my === gen ? aiAudio(parts[0]) : null;
+        for (let i = 0; i < parts.length && my === gen; i++) {
+          const buf = await next;
+          next = i + 1 < parts.length ? aiAudio(parts[i + 1]).catch(() => null) : null;   // 미리 만들기
+          if (my !== gen) return;
+          if (buf) await play(buf); else deviceSpeak(parts[i]);
+        }
+      }).catch(() => { if (my === gen) deviceSpeak(text); });
       return;
     }
     deviceSpeak(text);
   }
-  function stopSpeaking() { try { current?.stop(); } catch {} queue = Promise.resolve(); try { speechSynthesis.cancel(); } catch {} }
+  function stopSpeaking() { gen++; try { current?.stop(); } catch {} queue = Promise.resolve(); try { speechSynthesis.cancel(); } catch {} }
   // 한국어 목소리를 골라서 읽는다. 태블릿 기본 엔진(삼성 TTS)에 한국어가 없으면 조용하므로 알려준다
   function deviceSpeak(text) {
     try {
