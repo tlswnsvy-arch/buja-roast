@@ -83,7 +83,7 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
       <div id="ctlBody" style="display:none;gap:12px">
         <details class="warn"><summary>⚠ 시작 전에 꼭 읽기: 끝날 때까지 로스터 옆에 계세요</summary>
           화면이 스스로 히터를 켜고 바꾸고 배출까지 해요. 자리를 비우지 말고, 이상한 소리·냄새·연기가 나면 바로 "전체 정지", 안 되면 로스터 전원을 끄세요.
-          태블릿 화면을 끄거나 다른 앱으로 가면 안전을 위해 버너가 꺼져요 (돌아오면 이어가기 버튼이 떠요).
+          화면을 끄거나 다른 앱으로 가면 안전을 위해 버너가 꺼져요 (돌아오면 이어가기 버튼이 떠요).
         </details>
         <div class="row">
           <label class="check"><input type="checkbox" id="autoAck"> 끝날 때까지 옆에서 지켜볼게요</label>
@@ -202,14 +202,14 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
   <section class="tab" id="tab-settings" hidden>
     <section class="card">
       <h2>기록 백업</h2>
-      <div class="note">볶은 기록, 생두, 레시피, 맛 평가는 이 태블릿 크롬 안에만 있어요. 크롬 데이터를 지우거나 기기를 바꾸면 사라지니 가끔 파일로 저장해 두세요. (Gemini 키는 백업에 넣지 않아요)</div>
+      <div class="note">볶은 기록, 생두, 레시피, 맛 평가는 이 기기의 크롬 안에만 있어요. 크롬 데이터를 지우거나 기기를 바꾸면 사라지니 가끔 파일로 저장해 두세요. (Gemini 키는 백업에 넣지 않아요)</div>
       <div class="row">
         <button id="backupShare" class="go">드라이브·카톡으로 보내기</button>
-        <button id="backupSave">태블릿에 저장</button>
+        <button id="backupSave">이 기기에 저장</button>
         <label class="chip pick" style="padding:11px 16px">백업 불러오기<input type="file" id="backupLoad" accept=".json,application/json" hidden></label>
         <button id="backupUndo" hidden>불러오기 전으로 되돌리기</button>
       </div>
-      <label class="row" style="gap:8px"><input type="checkbox" id="autoBackup" style="width:auto"> 볶을 때마다 자동 백업 (배출 뒤 태블릿 다운로드 폴더에 저장)</label>
+      <label class="row" style="gap:8px"><input type="checkbox" id="autoBackup" style="width:auto"> 볶을 때마다 자동 백업 (배출 뒤 이 기기 다운로드 폴더에 저장)</label>
       <span class="note" id="backupInfo"></span>
     </section>
     <section class="card">
@@ -220,7 +220,7 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
       <span class="note" id="histInfo"></span>
       <label>읽어주는 목소리
         <select id="voiceMode"><option value="hj-eleven">하집사 · 일레븐랩스 목소리 (저장해서 다시 씀)</option><option value="hj-fish">하집사 · Fish Audio 목소리 (저장해서 다시 씀)</option><option value="ai">AI 목소리 (Gemini 직접 · 1~3초 걸림)</option><option value="device">기기 기본 목소리 (빠름)</option></select></label>
-      <div class="note">하집사 목소리는 이 태블릿에 하집사 앱이 켜져 있어야 해요. 안 켜져 있으면 Gemini 목소리로 읽어요.</div>
+      <div class="note">하집사 목소리는 이 기기에 하집사 앱이 켜져 있어야 해요. 안 켜져 있으면 Gemini 목소리로 읽어요.</div>
       <div class="row"><button id="voicePrep">로스팅 중 하는 말 미리 녹음 (일레븐랩스·Fish Audio 각각)</button></div>
       <span class="note" id="voicePrepInfo"></span>
       <label>AI 목소리 고르기

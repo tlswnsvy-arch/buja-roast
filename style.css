@@ -248,3 +248,24 @@ button.go { background:linear-gradient(180deg, #3a9a4a, #2b7d39); border-color:#
 #tasteState .ts.ok { color:#9fe7b8; background:rgba(60,207,122,.08); border:1px solid rgba(60,207,122,.35); }
 #tasteState .ts.warn { color:#ffe2a8; background:rgba(255,216,138,.10); border:1px solid rgba(255,216,138,.45); }
 #tasteState .ts.warn b { color:var(--gold); }
+
+/* 휴대폰(좁은 화면) 처음 써 보고 고침 (2026-10-10): 로고 글씨가 한 글자씩 세로로 쪼개지고 버튼에 겹쳤다,
+   위쪽 고정 영역(온도 4칸이 2줄)이 화면 절반을 넘게 차지해서 아래 내용이 거의 안 보였다 */
+.wordmark { white-space:nowrap; }
+@media (max-width: 560px) {
+  .wordmark { display:none; }
+  .brand { flex:none; }
+  #connect { margin-left:auto; }
+  header { gap:6px; padding:8px 10px 4px; }
+  header button { padding:8px 8px; font-size:12.5px; white-space:nowrap; }
+  #stopAll { font-size:14px; padding:8px 10px; }
+  .brand .logo { width:32px; height:32px; }
+  #state { display:none; }
+  .tiles { grid-template-columns:repeat(4,1fr) !important; gap:5px; padding:2px 10px 4px; }
+  .tile { padding:5px 7px; border-radius:11px; }
+  .tile .k { font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tile .v { font-size:21px; }
+  .tile .s { font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .statusChips { padding:0 10px 4px; gap:4px; flex-wrap:nowrap; overflow-x:auto; }
+  .statusChips .chip { font-size:11.5px; padding:3px 8px; white-space:nowrap; }
+}
