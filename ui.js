@@ -77,6 +77,7 @@
     $(id).addEventListener('change', () => { try { localStorage.setItem(id, $(id).value); } catch {} });
   }
   // 로스팅 중 하는 말 미리 녹음: 정해진 안내(배출, 1차 크랙 임박, 버너 N퍼센트, 댐퍼 N칸 …)를 일레븐랩스·Fish Audio 로 각각 한 번씩
+  const PREP_FILL = () => { const ul = document.querySelector('.prepHow .prepList'); if (!ul) return; ul.innerHTML = PREP.map(t => '<li>' + t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]) + '</li>').join(''); document.querySelector('.prepHow .prepN').textContent = PREP.length; };
   const PREP = ['배출했어요', '쿨링 끝났어요', '80도 아래로 내려왔어요. 이제 기계를 꺼도 돼요. 채프통도 확인해 주세요',
     '곧 투입 온도예요. 생두를 준비하세요', '이제 생두를 넣으세요', '지금부터 마이야르 구간이에요.',
     '곧 1차 크랙이에요. 첫 크랙 들리면 버튼을 누르세요', '18분이 지났어요. 버너를 껐어요',
@@ -91,12 +92,43 @@
     const b = $('voicePrep'), info = $('voicePrepInfo');
     if (Date.now() - prepArm > 5000) { prepArm = Date.now(); info.textContent = '일레븐랩스 최대 약 1,100자 사용 (이미 녹음된 건 빼고) · Fish Audio 무료. 5초 안에 한 번 더 누르면 시작'; setTimeout(() => { if (Date.now() - prepArm >= 5000) info.textContent = ''; }, 5100); return; }
     prepArm = 0; b.disabled = true;
-    const r = await ALARM.hjPrepare(PREP, ['eleven', 'fish'], (n, total, p, t) => { info.textContent = `녹음 중 ${n}/${total} · ${p === 'eleven' ? '일레븐랩스' : 'Fish Audio'} · ${t}`; });
-    info.textContent = r.down ? '하집사 앱이 꺼져 있어요. 태블릿에서 하집사를 켜고 다시 눌러 주세요' : `미리 녹음 끝 (${r.ok}/${r.total}). 다음부터 이 말들은 바로, 돈 안 들고 나와요`;
+    const r = await ALARM.hjPrepare(PREP, ['eleven', 'fish'], (n, total, p, t) => { info.textContent = `만드는 중 ${n}/${total} · ${p === 'eleven' ? '일레븐랩스' : 'Fish Audio'} · ${t}`; });
+    info.textContent = r.down ? '하집사 앱이 꺼져 있어요. 이 기기에서 하집사를 켜고 다시 눌러 주세요' : `미리 녹음 끝 (${r.ok}/${r.total}). 다음부터 이 말들은 바로, 돈 안 들고 나와요`;
     b.disabled = false;
+  };
+  // ▶ 어떻게 되는지 보기: 미리 만들기를 가짜로 보여 준다. 사이트에 안 보내고 저장도 안 한다 (돈 0원, 2026-10-10)
+  if ($('prepDemo')) $('prepDemo').onclick = () => {
+    const ov = document.createElement('div'); ov.className = 'pdOv';
+    ov.innerHTML = '<div class="pdBox"><div class="pdTag">미리보기 · 가짜 화면이에요 (돈 안 들어요)</div>' +
+      '<div class="pdFlow"><div class="pdN" data-n="0">☕<b>로스팅 앱</b></div><i class="pdA"></i><div class="pdN" data-n="1">🏠<b>하집사</b></div><i class="pdA"></i><div class="pdN" data-n="2">🌐<b>사이트</b><small>일레븐랩스·Fish</small></div><i class="pdA"></i><div class="pdN" data-n="3">💾<b>이 기기에 저장</b></div></div>' +
+      '<div class="pdCap"></div><div class="pdProg"></div><div class="pdSaved"></div>' +
+      '<div class="pdBtns"><button class="pdClose">닫기</button></div></div>';
+    document.body.appendChild(ov);
+    let stop = false; const q = s => ov.querySelector(s);
+    q('.pdClose').onclick = () => { stop = true; ov.remove(); };
+    const on = n => ov.querySelectorAll('.pdN').forEach(e => e.classList.toggle('on', +e.dataset.n === n));
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const cap = t => { q('.pdCap').textContent = t; };
+    const sample = ['배출했어요', '이제 생두를 넣으세요', '버너 50퍼센트', '댐퍼를 3칸으로 돌려 주세요', '곧 1차 크랙이에요. 첫 크랙 들리면 버튼을 누르세요'];
+    (async () => {
+      cap('1. 설정에서 "🎙 안내 소리 미리 만들어 두기"를 두 번 눌러요.'); on(0); await sleep(3500); if (stop) return;
+      cap('2. 로스팅 앱이 정해 둔 안내 문장(' + PREP.length + '개)을 하집사에게 하나씩 넘겨요. 직접 적을 건 없어요.'); on(1); await sleep(4000); if (stop) return;
+      cap('3. 하집사가 문장을 목소리 사이트에 보내면, 그 목소리로 읽은 소리 파일이 돌아와요. 이때만 크레딧이 들어요.'); on(2); await sleep(4500); if (stop) return;
+      cap('4. 받은 소리를 이 기기에 저장해요. 이미 저장된 문장은 건너뛰어서 돈이 다시 안 들어요.'); on(3);
+      for (let k = 0; k < sample.length && !stop; k++) {
+        const p = k % 2 ? 'Fish Audio' : '일레븐랩스';
+        q('.pdProg').textContent = '만드는 중 ' + (k + 1) + '/' + (PREP.length * 2) + ' · ' + p + ' · ' + sample[k];
+        [1, 2, 3].forEach((n, j) => setTimeout(() => !stop && on(n), j * 450)); await sleep(1500);
+        const d = document.createElement('div'); d.textContent = (k === 1 ? '⏭ ' : '💾 ') + sample[k] + ' · ' + p + (k === 1 ? ' · 이미 있어서 건너뜀' : ''); q('.pdSaved').appendChild(d);
+      }
+      if (stop) return; q('.pdProg').textContent = '… (가짜라 5개만 보여 줬어요)'; await sleep(1500); if (stop) return;
+      cap('5. 끝! 로스팅 중에 "배출했어요"가 필요하면 사이트에 안 묻고 저장된 소리를 바로 틀어요. 기다림 0초, 돈 0원.'); on(0); await sleep(500);
+      q('.pdBtns').insertAdjacentHTML('afterbegin', '<button class="pdAgain">다시 보기</button>'); q('.pdAgain').onclick = () => { ov.remove(); $('prepDemo').click(); };
+    })();
   };
   // 맨 위 📖 칩: 리포트(긴 글) 읽는 목소리. 실수로 안 바뀌게 길게 눌러야 바뀐다 (사용자 요청, 2026-10-10)
   const RV = [['hj-fish', '📖 Fish'], ['hj-eleven', '📖 일레븐'], ['ai', '📖 Gemini'], ['device', '📖 기기']];
+  PREP_FILL();
   const rvNow = () => { try { return localStorage.getItem('reportVoice') || 'hj-fish'; } catch { return 'hj-fish'; } };
   const showRv = () => { const b = $('reportVoiceBtn'); if (b) b.textContent = (RV.find(x => x[0] === rvNow()) || RV[0])[1]; };
   if ($('reportVoiceBtn')) {
