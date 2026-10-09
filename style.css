@@ -253,8 +253,11 @@ button.go { background:linear-gradient(180deg, #3a9a4a, #2b7d39); border-color:#
    위쪽 고정 영역(온도 4칸이 2줄)이 화면 절반을 넘게 차지해서 아래 내용이 거의 안 보였다 */
 .wordmark { white-space:nowrap; }
 @media (max-width: 560px) {
-  .wordmark { display:none; }
-  .brand { flex:none; }
+  .wordmark { display:block; }
+  .wm1 { font-size:14px; letter-spacing:0; }
+  .wm1 span { margin-left:3px; }
+  .wm2 { display:none; }
+  .brand { flex:none; gap:6px; }
   #connect { margin-left:auto; }
   header { gap:6px; padding:8px 10px 4px; }
   header button { padding:8px 8px; font-size:12.5px; white-space:nowrap; }

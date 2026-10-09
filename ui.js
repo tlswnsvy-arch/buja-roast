@@ -114,7 +114,8 @@
   // 맨 위 🔊/🔇: 음성 끄기 (삑 소리와 진동은 남김)
   // 음성 3단계: 🔉 중요한 것만(기본) → 🔊 전부 → 🔇 끔(삑 소리·진동만)
   const LEVELS = { key: '🔉 중요한 것만', all: '🔊 전부', off: '🔇 음성 끔' }, ORDER = ['key', 'all', 'off'];
-  const showMute = () => { const lv = ALARM.level(); $('muteBtn').textContent = LEVELS[lv]; $('muteBtn').style.opacity = lv === 'off' ? '.7' : '1'; };
+  // 휴대폰(좁은 화면)은 아이콘만 (이름 글씨 자리를 만들려고)
+  const showMute = () => { const lv = ALARM.level(); $('muteBtn').textContent = innerWidth <= 560 ? LEVELS[lv].split(' ')[0] : LEVELS[lv]; $('muteBtn').style.opacity = lv === 'off' ? '.7' : '1'; };
   $('muteBtn').onclick = () => {
     const next = ORDER[(ORDER.indexOf(ALARM.level()) + 1) % ORDER.length];
     try { localStorage.setItem('voiceLevel', next); localStorage.removeItem('mute'); } catch {}
