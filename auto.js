@@ -88,36 +88,63 @@ window.ALARM = (() => {
   function play(buf) {
     return new Promise(res => { const s = ctx.createBufferSource(); s.buffer = buf; s.connect(ctx.destination); s.onended = res; current = s; s.start(); });
   }
-  // 긴 글은 문장 단위(약 120자)로 나눠서, 첫 문장을 바로 읽는 동안 다음 문장을 미리 만든다
+  // 긴 글은 문장 하나씩 나눠 읽는다 (2026-10-10). 예전엔 120자씩 묶어서 섹션이 섞이고 조각이 매번 새것이라
+  // 하집사 창고에서 한 번도 다시 못 썼다. 문장 하나 = 조각 하나면 '예상 맛.', '투입 210도.' 같은 말이 다음 레시피에서 다시 쓰인다.
+  // '¶' 는 섹션 경계: 그 자리에서 잠깐(PAUSE) 쉰다. 다음 문장들은 읽는 동안 미리 만든다.
+  // 실험 결과 (2026-10-10, Fish 조각 22개 분석): 조각마다 앞 0.1~0.2초, 뒤 0.15~0.55초 무음이 붙어 있고 소리 크기가 최대 6dB 달랐다.
+  // 그냥 이어 틀면 문장 사이가 0.3~0.7초씩 떠서 끊겨 들린다 → 앞뒤 무음을 잘라 내고, 문장 사이 GAP·섹션 사이 PAUSE 만큼만 쉬고, 크기를 맞춘다
+  const GAP = 180, PAUSE = 500, TARGET_RMS = 0.07;   // 0.07 ≈ -23dB
+  function tidy(buf) {
+    try {
+      const ch = buf.getChannelData(0), sr = buf.sampleRate, W = Math.round(sr * 0.01), n = Math.floor(ch.length / W);
+      const rms = new Float32Array(n);
+      for (let k = 0; k < n; k++) { let e = 0; for (let i = k * W; i < (k + 1) * W; i++) e += ch[i] * ch[i]; rms[k] = Math.sqrt(e / W); }
+      const on = v => v > 0.01;   // -40dB
+      let a = 0, b = n - 1; while (a < n && !on(rms[a])) a++; while (b > a && !on(rms[b])) b--;
+      if (a >= b) return buf;
+      const pad = 3, s0 = Math.max(0, (a - pad) * W), s1 = Math.min(ch.length, (b + 1 + pad) * W);
+      let e = 0, c = 0, peak = 0; for (let k = a; k <= b; k++) if (on(rms[k])) { e += rms[k] * rms[k]; c++; }
+      for (let i = s0; i < s1; i++) peak = Math.max(peak, Math.abs(ch[i]));
+      const g = Math.min(2.5, TARGET_RMS / Math.sqrt(e / Math.max(1, c)), 0.98 / Math.max(1e-6, peak));
+      const out = ctx.createBuffer(buf.numberOfChannels, s1 - s0, sr);
+      for (let c2 = 0; c2 < buf.numberOfChannels; c2++) { const src = buf.getChannelData(c2), dst = out.getChannelData(c2); for (let i = 0; i < dst.length; i++) dst[i] = src[s0 + i] * g; }
+      return out;
+    } catch { return buf; }
+  }
   function chunks(text) {
-    const out = []; let cur = '';
-    for (const s of String(text).split(/(?<=[.!?。])\s+/)) {
-      if (cur && (cur + ' ' + s).length > 120) { out.push(cur); cur = s; } else cur = cur ? cur + ' ' + s : s;
-    }
-    if (cur) out.push(cur);
+    const out = [];
+    String(text).split('¶').forEach(para => {
+      const ss = para.split(/(?<=[.!?。])\s+/).map(s => s.trim()).filter(s => s && !/^[.!?。]+$/.test(s));
+      if (out.length && ss.length) out.push('¶');
+      out.push(...ss);
+    });
     return out;
   }
+  const flat = text => String(text).replace(/\s*¶\s*/g, ' ').trim();
   // 음성 끔(🔇)이면 말은 안 하고, ring()의 삑 소리·진동만 남는다
   const level = () => pref('voiceLevel', pref('mute', '0') === '1' ? 'off' : 'key');
   const muted = () => level() === 'off';
   function speak(text) {
     if (muted()) return;
-    const mode = modeFor(text);
+    const mode = modeFor(flat(text));
     if (mode !== 'device') {
       unlock();
       const my = gen, parts = chunks(text);
+      const make = i => parts[i] === '¶' ? Promise.resolve('¶') : aiAudio(parts[i], mode).catch(() => null);
       queue = queue.then(async () => {
-        let next = my === gen ? aiAudio(parts[0], mode) : null;
+        // 3개 앞까지 미리 만든다 (문장이 짧아져서 하나만 앞서 만들면 사이가 뜬다)
+        const ahead = []; const pre = i => { if (i < parts.length && !ahead[i]) ahead[i] = make(i); };
+        pre(0); pre(1); pre(2);
         for (let i = 0; i < parts.length && my === gen; i++) {
-          const buf = await next;
-          next = i + 1 < parts.length ? aiAudio(parts[i + 1], mode).catch(() => null) : null;   // 미리 만들기
+          const buf = await ahead[i]; pre(i + 3);
           if (my !== gen) return;
-          if (buf) await play(buf); else deviceSpeak(parts[i]);
+          if (buf === '¶') { await new Promise(r => setTimeout(r, PAUSE - GAP)); continue; }
+          if (buf) { await play(parts.length > 1 ? tidy(buf) : buf); if (i < parts.length - 1) await new Promise(r => setTimeout(r, GAP)); } else deviceSpeak(parts[i]);
         }
-      }).catch(() => { if (my === gen) deviceSpeak(text); });
+      }).catch(() => { if (my === gen) deviceSpeak(flat(text)); });
       return;
     }
-    deviceSpeak(text);
+    deviceSpeak(flat(text));
   }
   function stopSpeaking() { gen++; try { current?.stop(); } catch {} queue = Promise.resolve(); try { speechSynthesis.cancel(); } catch {} }
   // 한국어 목소리를 골라서 읽는다. 태블릿 기본 엔진(삼성 TTS)에 한국어가 없으면 조용하므로 알려준다

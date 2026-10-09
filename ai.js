@@ -215,20 +215,28 @@ function renderRec() {
     pushHistory('AI 추천값으로'); Object.assign(lastRec, JSON.parse(JSON.stringify(r.orig))); store.set('lastRec', lastRec); saveBeanProfile(); renderRec();
   };
   $('verBtn').onclick = () => { const p = $('verPanel'); p.hidden = !p.hidden; if (!p.hidden) renderVersions(); };
-  const steps = (r.steps || []).map(s => `원두 ${s.bt}도에서 버너 ${s.burner}퍼센트`).join(', ');
+  // 읽을 글 만들기 (2026-10-10 나눠 읽기): 레시피는 칸이 정해진 데이터라서 어느 말이 '정해진 말'이고 어느 말이 'AI가 새로 쓴 말'인지 앱이 안다.
+  //  - 정해진 말(제목, 배전도, 설정값 숫자 항목)은 짧은 문장 하나씩 → 하집사 창고에서 다음 레시피에도 다시 쓰인다
+  //  - AI가 새로 쓴 말(요약, 예상 맛, 볼 것)은 문장 하나를 통째로 → 자연스럽게
+  //  - 섹션 사이는 '¶' (잠깐 쉬기). 문장 끝 마침표는 하나만 (예전엔 '확인하세요..' 처럼 두 개 붙었다)
+  const sent = s => { s = String(s || '').trim().replace(/[.。\s]+$/, ''); return s ? s + '.' : ''; };
+  const sents = arr => (arr || []).map(sent).filter(Boolean).join(' ');
+  const steps = (r.steps || []).map(s => sent(`원두 ${s.bt}도에서 버너 ${s.burner}퍼센트`)).join(' ');
   const say = {
-    summary: [clean(r.summary), r.level && `배전도는 ${r.level}.`].filter(Boolean).join(' '),
-    settings: `투입 ${r.charge}도, 시작 버너 ${r.startBurner ?? 100}퍼센트. ${steps}. 1차 크랙 뒤 ${r.rise ?? 8}도 올리고, 디벨롭 ${r.dtSec ?? 60}초. 배출 ${r.drop}도.`,
-    flavor: r.flavor && '예상 맛은 ' + r.flavor + '.',
-    why: r.why?.length && '이렇게 정한 이유. ' + r.why.join('. ') + '.',
-    watch: r.watch?.length && '볶는 중 볼 것. ' + r.watch.join('. ') + '.',
-    next: r.nextTry && '다음 배치 실험. ' + r.nextTry,
-    detail: r.detail?.length && r.detail.map(d => d.title + '. ' + d.text).join(' '),
+    summary: [sent(clean(r.summary)), r.level && sent('배전도는 ' + r.level)].filter(Boolean).join(' '),
+    settings: [sent('투입 ' + r.charge + '도'), sent('시작 버너 ' + (r.startBurner ?? 100) + '퍼센트'), steps, sent('1차 크랙 뒤 ' + (r.rise ?? 8) + '도'), sent('디벨롭 ' + (r.dtSec ?? 60) + '초'), sent('배출 ' + r.drop + '도')].join(' '),
+    flavor: r.flavor && '예상 맛. ¶ ' + sent(r.flavor),
+    why: r.why?.length && '이렇게 정한 이유. ¶ ' + sents(r.why),
+    watch: r.watch?.length && '볶는 중 볼 것. ¶ ' + sents(r.watch),
+    next: r.nextTry && '다음 배치 실험. ¶ ' + sent(r.nextTry),
+    detail: r.detail?.length && r.detail.map(d => sent(d.title) + ' ' + sent(d.text)).join(' ¶ '),
   };
+  say.settingsTitled = '로스팅 설정값. ¶ ' + say.settings;
   const read = text => { ALARM.unlock(); ALARM.stopSpeaking?.(); if (text) ALARM.speak(text); };
   $('rec').querySelectorAll('.say').forEach(b => b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); read(say[b.dataset.say]); }));
   $('detailBtn').onclick = () => explainRec();
-  $('readRec').onclick = () => read(['summary', 'settings', 'flavor', 'watch', 'next'].map(k => say[k]).filter(Boolean).join(' '));
+  $('readRec').onclick = () => read(['summary', 'settingsTitled', 'flavor', 'watch', 'next'].map(k => say[k]).filter(Boolean).join(' ¶ '));
+  window.__recSay = say;   // 나눠 읽기 실험용
   $('rec').querySelectorAll('.recnum').forEach(inp => inp.addEventListener('change', () => {
     const k = inp.dataset.k, v = +inp.value; if (!isFinite(v)) return;
     pushHistory('직접 고침');
@@ -434,7 +442,8 @@ patch에 쓸 수 있는 키: charge, startBurner, steps(전체 배열 [{bt,burne
       <div class="recsec"><div class="rech">다음 배치에 반영할 것</div>
       <div class="note">하나만 고르는 걸 추천해요. 잘못 눌렀으면 다시 누르면 취소돼요.</div>
       ${(r.changes || []).map((c, i) => `<div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;padding:6px 0;border-top:1px solid var(--line)"><button data-apply="${i}">적용</button><div><div>${esc(c.label)}</div><div class="note">${esc(c.why)}</div></div></div>`).join('')}</div>`;
-    $('readReview').onclick = () => { ALARM.unlock(); ALARM.stopSpeaking?.(); ALARM.speak([(r.deviation || []).length ? '예상과 달랐던 점. ' + r.deviation.join('. ') : '', '잘된 점. ' + (r.good || []).join('. '), '아쉬운 점. ' + (r.bad || []).join('. '), '다음 배치 선택지. ' + (r.changes || []).map((c, i) => (i + 1) + '번, ' + c.label).join('. ')].join(' ')); };
+    $('readReview').onclick = () => { ALARM.unlock(); ALARM.stopSpeaking?.(); const sent = s => { s = String(s || '').trim().replace(/[.。\s]+$/, ''); return s ? s + '.' : ''; };
+      ALARM.speak([(r.deviation || []).length ? '예상과 달랐던 점. ¶ ' + r.deviation.map(sent).join(' ') : '', '잘된 점. ¶ ' + (r.good || []).map(sent).join(' '), '아쉬운 점. ¶ ' + (r.bad || []).map(sent).join(' '), '다음 배치 선택지. ¶ ' + (r.changes || []).map((c, i) => sent((i + 1) + '번, ' + c.label)).join(' ')].filter(Boolean).join(' ¶ ')); };
     // 적용 ↔ 취소: 다시 누르면 그 변경이 바꾼 값만 원래대로
     box.querySelectorAll('[data-apply]').forEach(b => {
       let before = null;
