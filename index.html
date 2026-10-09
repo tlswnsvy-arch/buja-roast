@@ -8,7 +8,7 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>하집사 로스팅</title>
-<link rel="stylesheet" href="style.css?v=20261010b">
+<link rel="stylesheet" href="style.css?v=20261010c">
 <link rel="manifest" href="manifest.json?v=3">
 <link rel="icon" href="icon-192.png?v=2">
 <link rel="apple-touch-icon" href="icon-192.png?v=2">
@@ -206,7 +206,7 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
       <div class="row">
         <button id="backupShare" class="go">드라이브·카톡으로 보내기</button>
         <button id="backupSave">이 기기에 저장</button>
-        <label class="chip pick" style="padding:11px 16px">백업 불러오기<input type="file" id="backupLoad" accept=".json,application/json" hidden></label>
+        <label class="chip pick" style="padding:11px 16px">백업 불러오기<input type="file" id="backupLoad" accept=".json,.txt,application/json,text/plain" hidden></label>
         <button id="backupUndo" hidden>불러오기 전으로 되돌리기</button>
       </div>
       <label class="row" style="gap:8px"><input type="checkbox" id="autoBackup" style="width:auto"> 볶을 때마다 자동 백업 (배출 뒤 이 기기 다운로드 폴더에 저장)</label>
@@ -588,13 +588,13 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=20261010b"></script>
-<script src="control.js?v=20261010b"></script>
-<script src="auto.js?v=20261010b"></script>
-<script src="replay.js?v=20261010b"></script>
-<script src="cupping.js?v=20261010b"></script>
-<script src="backup.js?v=20261010b"></script>
-<script src="ui.js?v=20261010b"></script>
-<script src="demo.js?v=20261010b"></script>
+<script src="ai.js?v=20261010c"></script>
+<script src="control.js?v=20261010c"></script>
+<script src="auto.js?v=20261010c"></script>
+<script src="replay.js?v=20261010c"></script>
+<script src="cupping.js?v=20261010c"></script>
+<script src="backup.js?v=20261010c"></script>
+<script src="ui.js?v=20261010c"></script>
+<script src="demo.js?v=20261010c"></script>
 </body>
 </html>

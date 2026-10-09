@@ -24,8 +24,10 @@
   // 공유로 보내기: 구글 드라이브, 카톡 나에게, 메일 등 고르면 PC 없이 태블릿 밖에 보관된다
   $('backupShare').onclick = async () => {
     const { data, name, blob } = makeFile();
-    const file = new File([blob], name, { type: 'application/json' });
-    if (!navigator.canShare?.({ files: [file] })) return download(false);
+    // 안드로이드 크롬은 .json 파일을 공유하지 못한다 (canShare=false → 공유 창 없이 다운로드만 됐다, 2026-10-10)
+    // → 글자 파일(.txt)로 보낸다. 불러오기는 .json·.txt 둘 다 받는다
+    const file = new File([blob], name.replace(/\.json$/, '.txt'), { type: 'text/plain' });
+    if (!navigator.canShare?.({ files: [file] })) { download(false); $('backupInfo').textContent += ' (이 기기는 공유하기가 안 돼서 다운로드 폴더에 저장했어요)'; return; }
     try {
       await navigator.share({ files: [file], title: name });
       $('backupInfo').textContent = `배치 ${count(data)}개 백업을 보냈어요.`;
