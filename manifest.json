@@ -1,6 +1,6 @@
 {
-  "name": "BUJA AI 로스팅",
-  "short_name": "AI 로스팅",
+  "name": "하집사 로스팅",
+  "short_name": "하집사 로스팅",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -1,4 +1,4 @@
-// 부자 AI 로스팅: Gemini 프로파일 추천 · 채팅 · 로스팅 중 안내 · 끝난 뒤 리뷰
+// 하집사 로스팅: Gemini 프로파일 추천 · 채팅 · 로스팅 중 안내 · 끝난 뒤 리뷰
 // index.html 전역(samples, events, chargeAt, ror, draw, log, $)을 그대로 쓴다
 
 const MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite'];

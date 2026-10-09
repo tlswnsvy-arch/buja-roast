@@ -11,7 +11,7 @@
     try { localStorage.setItem('lastBackup', new Date().toISOString()); } catch {}
     const data = snapshot();
     const text = JSON.stringify({ app: 'buja-ai-roasting', version: 1, savedAt: new Date().toISOString(), data }, null, 1);
-    return { data, name: `부자AI로스팅_백업_${stamp()}.json`, blob: new Blob([text], { type: 'application/json' }) };
+    return { data, name: `하집사로스팅_백업_${stamp()}.json`, blob: new Blob([text], { type: 'application/json' }) };
   };
   const download = (quiet) => {
     const { data, name, blob } = makeFile();
