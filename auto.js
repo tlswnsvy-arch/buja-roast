@@ -24,7 +24,36 @@ window.ALARM = (() => {
   const cache = new Map();
   let queue = Promise.resolve(), current = null, gen = 0;   // gen: 멈추면 올라가서, 그 전에 줄 서 있던 소리는 버린다
   const pref = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
-  async function aiAudio(text) {
+  // ---------- 하집사 목소리 (2026-10-10): 태블릿 하집사 앱에 "이 문장 읽어줘" → 일레븐랩스·Fish Audio 목소리, 하집사가 저장해 두고 다시 씀 ----------
+  const HJ = 'http://127.0.0.1:8790/api/say';
+  let hjDownUntil = 0;   // 하집사가 꺼져 있으면 1분 동안은 묻지 않고 바로 Gemini 로
+  async function hjAudio(text, provider) {
+    if (Date.now() < hjDownUntil) throw new Error('하집사 꺼짐');
+    const ac = new AbortController(), t = setTimeout(() => ac.abort(), 15000);
+    try {
+      const r = await fetch(HJ + '?app=roast&provider=' + provider + '&text=' + encodeURIComponent(text), { signal: ac.signal });
+      if (r.status !== 200) throw new Error('하집사 ' + r.status);
+      return await ctx.decodeAudioData(await r.arrayBuffer());
+    } catch (e) { if (e.name !== 'AbortError') hjDownUntil = Date.now() + 60000; throw e; }
+    finally { clearTimeout(t); }
+  }
+  // 하집사에 미리 녹음 (같은 문장은 하집사가 저장해서 두 번째부터 돈 안 씀)
+  async function hjPrepare(texts, providers, onStep) {
+    let ok = 0, n = 0, total = texts.length * providers.length;
+    for (const p of providers) for (const t of texts) {
+      n++; onStep?.(n, total, p, t);
+      try { const r = await fetch(HJ + '?app=roast&provider=' + p + '&text=' + encodeURIComponent(t)); if (r.status === 200) { await r.arrayBuffer(); ok++; } } catch { return { ok, total, down: true }; }
+    }
+    return { ok, total };
+  }
+  // 리포트(긴 글, 80자 넘음)는 맨 위 📖 칩의 목소리로 따로 (짧은 안내는 설정의 목소리) — 2026-10-10
+  const modeFor = text => String(text).length > 80 ? pref('reportVoice', 'hj-fish') : pref('voiceMode', 'hj-eleven');
+  async function aiAudio(text, mode = pref('voiceMode', 'hj-eleven')) {
+    if (mode.startsWith('hj-')) {
+      const ck = mode + '|' + text;
+      if (cache.has(ck)) return cache.get(ck);
+      try { const b = await hjAudio(text, mode.slice(3)); if (text.length < 80) cache.set(ck, b); return b; } catch {}   // 안 되면 아래 Gemini 로
+    }
     // 기억은 목소리별로 (목소리를 바꿔도 예전 목소리 소리가 나오던 문제)
     const voice = pref('aiVoice', 'Kore'), ck = voice + '|' + text;
     if (cache.has(ck)) return cache.get(ck);
@@ -73,14 +102,15 @@ window.ALARM = (() => {
   const muted = () => level() === 'off';
   function speak(text) {
     if (muted()) return;
-    if (pref('voiceMode', 'ai') === 'ai') {
+    const mode = modeFor(text);
+    if (mode !== 'device') {
       unlock();
       const my = gen, parts = chunks(text);
       queue = queue.then(async () => {
-        let next = my === gen ? aiAudio(parts[0]) : null;
+        let next = my === gen ? aiAudio(parts[0], mode) : null;
         for (let i = 0; i < parts.length && my === gen; i++) {
           const buf = await next;
-          next = i + 1 < parts.length ? aiAudio(parts[i + 1]).catch(() => null) : null;   // 미리 만들기
+          next = i + 1 < parts.length ? aiAudio(parts[i + 1], mode).catch(() => null) : null;   // 미리 만들기
           if (my !== gen) return;
           if (buf) await play(buf); else deviceSpeak(parts[i]);
         }
@@ -107,7 +137,7 @@ window.ALARM = (() => {
   try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); } catch {}
   // buzz=false면 로스터 부저는 빼고 태블릿 소리만 (1차 크랙 임박처럼 귀를 기울여야 할 때 부저가 방해돼서)
   const ring = (text, times = 3, buzz = true) => { beep(times); if (buzz) try { window.CONTROL?.buzz(Math.min(3, times)); } catch {} setTimeout(() => speak(text), times * 350 + 100); };
-  return { unlock, ring, beep, speak, stopSpeaking, level };
+  return { unlock, ring, beep, speak, stopSpeaking, level, hjPrepare };
 })();
 
 window.AUTO = (() => {

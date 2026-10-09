@@ -31,6 +31,7 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
     <span id="state">연결 안 됨</span>
     <button class="main" id="connect">로스터 연결</button>
     <button id="muteBtn" title="음성 켜기/끄기">🔊</button>
+    <button id="reportVoiceBtn" title="리포트 읽는 목소리 (길게 눌러 바꾸기)" style="font-size:12px;padding:4px 8px">📖 Fish</button>
     <button id="stopAll" class="stop">전체 정지</button>
   </header>
   <div class="tiles">
@@ -218,7 +219,10 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
       <label>예전 부자 앱 기록 (rows.json)<input type="file" id="histFile" accept=".json"></label>
       <span class="note" id="histInfo"></span>
       <label>읽어주는 목소리
-        <select id="voiceMode"><option value="ai">AI 목소리 (Gemini, 하집사와 같은 방식 · 1~3초 걸림)</option><option value="device">기기 기본 목소리 (빠름)</option></select></label>
+        <select id="voiceMode"><option value="hj-eleven">하집사 · 일레븐랩스 목소리 (저장해서 다시 씀)</option><option value="hj-fish">하집사 · Fish Audio 목소리 (저장해서 다시 씀)</option><option value="ai">AI 목소리 (Gemini 직접 · 1~3초 걸림)</option><option value="device">기기 기본 목소리 (빠름)</option></select></label>
+      <div class="note">하집사 목소리는 이 태블릿에 하집사 앱이 켜져 있어야 해요. 안 켜져 있으면 Gemini 목소리로 읽어요.</div>
+      <div class="row"><button id="voicePrep">로스팅 중 하는 말 미리 녹음 (일레븐랩스·Fish Audio 각각)</button></div>
+      <span class="note" id="voicePrepInfo"></span>
       <label>AI 목소리 고르기
         <select id="aiVoice"><option value="Kore">Kore · 또렷하고 차분한 여성</option><option value="Aoede">Aoede · 밝고 산뜻한 여성</option><option value="Leda">Leda · 어리고 맑은 여성</option><option value="Sulafat">Sulafat · 따뜻한 여성</option><option value="Puck">Puck · 경쾌한 남성</option><option value="Charon">Charon · 낮고 믿음직한 남성</option><option value="Fenrir">Fenrir · 들뜬 남성</option><option value="Orus">Orus · 단단한 남성</option></select></label>
       <div class="row"><button id="voiceTest">🔊 목소리 들어보기</button></div>

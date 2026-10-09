@@ -76,6 +76,41 @@
     try { const v = localStorage.getItem(id); if (v) $(id).value = v; } catch {}
     $(id).addEventListener('change', () => { try { localStorage.setItem(id, $(id).value); } catch {} });
   }
+  // 로스팅 중 하는 말 미리 녹음: 정해진 안내(배출, 1차 크랙 임박, 버너 N퍼센트, 댐퍼 N칸 …)를 일레븐랩스·Fish Audio 로 각각 한 번씩
+  const PREP = ['배출했어요', '쿨링 끝났어요', '80도 아래로 내려왔어요. 이제 기계를 꺼도 돼요. 채프통도 확인해 주세요',
+    '곧 투입 온도예요. 생두를 준비하세요', '이제 생두를 넣으세요', '지금부터 마이야르 구간이에요.',
+    '곧 1차 크랙이에요. 첫 크랙 들리면 버튼을 누르세요', '18분이 지났어요. 버너를 껐어요',
+    '로스터가 다시 연결됐어요. 이어가려면 자동 이어가기를 누르세요', '화면을 벗어나서 버너를 껐어요. 이어가려면 자동 이어가기를 누르세요',
+    '투입 준비 완료. 생두를 넣으세요.', '다음 배치를 시작해요. 채프통이 차 있지 않은지 확인해 주세요']
+    .concat(Array.from({ length: 10 }, (_, i) => `댐퍼를 ${i + 1}칸으로 돌려 주세요`))
+    .concat(Array.from({ length: 10 }, (_, i) => `지금부터 마이야르 구간이에요. 댐퍼를 ${i + 1}칸으로 돌리고 화면의 ${i + 1}을 눌러 주세요.`))
+    .concat(Array.from({ length: 11 }, (_, i) => `버너 ${i * 10}퍼센트`));
+  // 실수로 안 눌리게: 한 번 누르면 쓰는 양을 보여 주고, 5초 안에 한 번 더 눌러야 시작
+  let prepArm = 0;
+  if ($('voicePrep')) $('voicePrep').onclick = async () => {
+    const b = $('voicePrep'), info = $('voicePrepInfo');
+    if (Date.now() - prepArm > 5000) { prepArm = Date.now(); info.textContent = '일레븐랩스 최대 약 1,100자 사용 (이미 녹음된 건 빼고) · Fish Audio 무료. 5초 안에 한 번 더 누르면 시작'; setTimeout(() => { if (Date.now() - prepArm >= 5000) info.textContent = ''; }, 5100); return; }
+    prepArm = 0; b.disabled = true;
+    const r = await ALARM.hjPrepare(PREP, ['eleven', 'fish'], (n, total, p, t) => { info.textContent = `녹음 중 ${n}/${total} · ${p === 'eleven' ? '일레븐랩스' : 'Fish Audio'} · ${t}`; });
+    info.textContent = r.down ? '하집사 앱이 꺼져 있어요. 태블릿에서 하집사를 켜고 다시 눌러 주세요' : `미리 녹음 끝 (${r.ok}/${r.total}). 다음부터 이 말들은 바로, 돈 안 들고 나와요`;
+    b.disabled = false;
+  };
+  // 맨 위 📖 칩: 리포트(긴 글) 읽는 목소리. 실수로 안 바뀌게 길게 눌러야 바뀐다 (사용자 요청, 2026-10-10)
+  const RV = [['hj-fish', '📖 Fish'], ['hj-eleven', '📖 일레븐'], ['ai', '📖 Gemini'], ['device', '📖 기기']];
+  const rvNow = () => { try { return localStorage.getItem('reportVoice') || 'hj-fish'; } catch { return 'hj-fish'; } };
+  const showRv = () => { const b = $('reportVoiceBtn'); if (b) b.textContent = (RV.find(x => x[0] === rvNow()) || RV[0])[1]; };
+  if ($('reportVoiceBtn')) {
+    const b = $('reportVoiceBtn'); let hold = null, held = false;
+    const start = () => { held = false; hold = setTimeout(() => {
+      held = true; const i = RV.findIndex(x => x[0] === rvNow()); const next = RV[(i + 1) % RV.length];
+      try { localStorage.setItem('reportVoice', next[0]); } catch {}
+      showRv(); try { navigator.vibrate?.(30); } catch {}
+    }, 600); };
+    const end = () => { clearTimeout(hold); if (!held) { const t = b.textContent; b.textContent = '길게 누르면 바뀌어요'; setTimeout(showRv, 1500); } };
+    b.addEventListener('pointerdown', start); b.addEventListener('pointerup', end); b.addEventListener('pointerleave', () => clearTimeout(hold));
+    b.addEventListener('contextmenu', e => e.preventDefault());
+    showRv();
+  }
   // 맨 위 🔊/🔇: 음성 끄기 (삑 소리와 진동은 남김)
   // 음성 3단계: 🔉 중요한 것만(기본) → 🔊 전부 → 🔇 끔(삑 소리·진동만)
   const LEVELS = { key: '🔉 중요한 것만', all: '🔊 전부', off: '🔇 음성 끔' }, ORDER = ['key', 'all', 'off'];
