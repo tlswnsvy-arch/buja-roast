@@ -232,6 +232,23 @@ function renderRec() {
     detail: r.detail?.length && r.detail.map(d => sent(d.title) + ' ' + sent(d.text)).join(' ¶ '),
   };
   say.settingsTitled = '로스팅 설정값. ¶ ' + say.settings;
+  // TV 하집사 브리핑 (2026-10-10): "오늘 로스팅 브리핑" 하면 TV 가 읽는다. 문장은 이 화면에서 읽는 문장과 글자가 똑같게(¶ 로 구분),
+  // 목소리도 📖 칩 목소리로 보내서 TV 가 이미 만든 소리를 그대로 가져다 쓴다 (돈 0)
+  try {
+    const b = r.bean || readBean();
+    const parts = [
+      sent('오늘 볶을 원두는 ' + (b.name || '이름 없는 생두') + (b.amt ? ' ' + b.amt + '그램' : '') + '이에요'),
+      r.level && sent('배전도는 ' + r.level),
+      '로스팅 설정값.',
+      ...say.settings.split(/(?<=\.)\s+/),
+      r.flavor && '예상 맛.', r.flavor && sent(r.flavor),
+      r.watch?.[0] && '볶는 중 볼 것.', r.watch?.[0] && sent(r.watch[0]),
+      '예열이 끝나기 5분 전에 TV로 알려 드릴게요.',
+    ].filter(Boolean);
+    const rv = (() => { try { return localStorage.getItem('reportVoice') || 'hj-fish'; } catch { return 'hj-fish'; } })();
+    const prov = rv.startsWith('hj-') ? rv.slice(3) : '';
+    fetch('http://127.0.0.1:8790/api/roastbrief?p=' + prov + '&t=' + encodeURIComponent(parts.join('¶'))).catch(() => {});
+  } catch {}
   const read = text => { ALARM.unlock(); ALARM.stopSpeaking?.(); if (text) ALARM.speak(text); };
   $('rec').querySelectorAll('.say').forEach(b => b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); read(say[b.dataset.say]); }));
   $('detailBtn').onclick = () => explainRec();

@@ -102,12 +102,13 @@ window.ALARM = (() => {
       const on = v => v > 0.01;   // -40dB
       let a = 0, b = n - 1; while (a < n && !on(rms[a])) a++; while (b > a && !on(rms[b])) b--;
       if (a >= b) return buf;
-      const pad = 3, s0 = Math.max(0, (a - pad) * W), s1 = Math.min(ch.length, (b + 1 + pad) * W);
+      // 자른 자리에서 "지직" 소리가 나지 않게: 앞 40ms·뒤 60ms 여유를 두고, 양 끝을 20ms 동안 부드럽게 키우고 줄인다
+      const s0 = Math.max(0, (a - 4) * W), s1 = Math.min(ch.length, (b + 1 + 6) * W), F = Math.round(sr * 0.02);
       let e = 0, c = 0, peak = 0; for (let k = a; k <= b; k++) if (on(rms[k])) { e += rms[k] * rms[k]; c++; }
       for (let i = s0; i < s1; i++) peak = Math.max(peak, Math.abs(ch[i]));
       const g = Math.min(2.5, TARGET_RMS / Math.sqrt(e / Math.max(1, c)), 0.98 / Math.max(1e-6, peak));
       const out = ctx.createBuffer(buf.numberOfChannels, s1 - s0, sr);
-      for (let c2 = 0; c2 < buf.numberOfChannels; c2++) { const src = buf.getChannelData(c2), dst = out.getChannelData(c2); for (let i = 0; i < dst.length; i++) dst[i] = src[s0 + i] * g; }
+      for (let c2 = 0; c2 < buf.numberOfChannels; c2++) { const src = buf.getChannelData(c2), dst = out.getChannelData(c2); for (let i = 0; i < dst.length; i++) { const f = Math.min(1, i / F, (dst.length - 1 - i) / F); dst[i] = src[s0 + i] * g * f; } }
       return out;
     } catch { return buf; }
   }
@@ -225,6 +226,7 @@ window.AUTO = (() => {
   async function preheatAbort(why) {
     if (!on) return;
     cancel(why + ' → 버너를 껐어요');
+    tvView({ state: 'stopped', msg: why + ' → 버너를 껐어요' }, true);
     $('phase').textContent = '예열 멈춤';
     ALARM.ring('예열을 멈췄어요. ' + why, 4);
     await CONTROL.cmd('burner', 0);
@@ -235,7 +237,7 @@ window.AUTO = (() => {
     if (!on) return;
     // 실수로 홈으로 나간 경우: 돌아오면 이어갈 수 있게 기억해 둔다 (밖에 있는 동안은 버너 0 그대로)
     if (/화면 벗어남/.test(reason || '') && !events['배출']) paused = { mode, target, at: Date.now() };
-    phase = 'off'; stopUi(); say('자동 멈춤: ' + (reason || ''));
+    phase = 'off'; tvView({ state: 'off' }, true); stopUi(); say('자동 멈춤: ' + (reason || ''));
   }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden || !paused) return;
@@ -267,6 +269,7 @@ window.AUTO = (() => {
 
   // 배출 뒤 식히기: BT·ET가 모두 80도 아래로 내려가면 "기계 꺼도 돼요" (부자로스터 대표 권장: 80도 이하에서 끄기)
   const COOL_OFF = 80;
+  let coolHist = [], coolHistAt = null, coolStart = 0;
   let coolSaid = false, coolDropAt = null;
   function cooldown(st) {
     const d = events['배출'];
@@ -274,15 +277,31 @@ window.AUTO = (() => {
     if (coolDropAt !== d.t) { coolDropAt = d.t; coolSaid = false; }
     const hot = Math.max(st.bt, st.et);
     if (!coolSaid) $('phase').textContent = `식는 중 · ${hot}° → ${COOL_OFF}° 아래면 기계 꺼도 돼요`;
+    // TV 에 식는 온도·남은 시간 (보기 전용). 최근 1분 동안 내려간 속도로 80도까지 남은 시간을 어림한다
+    if (!coolSaid) {
+      const now = Date.now(); if (!coolHist.length || coolDropAt !== coolHistAt) { coolHist = []; coolHistAt = coolDropAt; coolStart = hot; }
+      coolHist.push([now, hot]); while (coolHist.length > 2 && now - coolHist[0][0] > 60000) coolHist.shift();
+      const [t0, h0] = coolHist[0], rate = now - t0 > 15000 ? (h0 - hot) / ((now - t0) / 60000) : 0;
+      tvView({ state: 'cool', bt: hot, target: COOL_OFF, start: coolStart, sec: (samples.at(-1)?.t ?? d.t) - d.t, eta: rate > 0.5 ? (hot - COOL_OFF) / rate : 0 });
+    }
     if (!coolSaid && hot < COOL_OFF) {
       coolSaid = true;
+      tvView({ state: 'cooldone', bt: hot, target: COOL_OFF }, true);   // TV 도 '이제 꺼도 돼요' 하고 알린다
       $('phase').textContent = `${hot}° · 이제 기계를 꺼도 돼요`;
       ALARM.ring(`${COOL_OFF}도 아래로 내려왔어요. 이제 기계를 꺼도 돼요. 채프통도 확인해 주세요`, 3, false);
     }
   }
 
+  // TV(스트리머)에 예열 상태 보여 주기 (2026-10-10): 같은 기기 하집사에 상태만 보낸다. 보기 전용, TV 에서 로스터를 움직일 길은 없다
+  let tvLast = 0;
+  function tvView(v, now) {
+    if (!now && Date.now() - tvLast < 4000) return; tvLast = Date.now();
+    fetch('http://127.0.0.1:8790/api/roastview?d=' + encodeURIComponent(JSON.stringify(v))).catch(() => {});
+  }
+  window.TVVIEW = tvView;
   function tick(st) {
     cooldown(st);
+    if (phase === 'roast' && Date.now() - tvLast > 15000) tvView({ state: 'roast' });
     if (!on) return;
     burnerNow = st.burner;
     const r = lastRec, now = Date.now();
@@ -290,7 +309,7 @@ window.AUTO = (() => {
     if (phase === 'preheat') {
       if (chargeAt != null) {
         if (mode === 'preheat') { cancel('투입 감지. 예열만 모드라 여기서부터는 손으로 조절하세요'); return; }
-        phase = 'roast'; setBurner(r.startBurner ?? 100, '투입 감지: 시작 버너'); return;
+        phase = 'roast'; tvView({ state: 'roast' }, true); setBurner(r.startBurner ?? 100, '투입 감지: 시작 버너'); return;
       }
       // 목표 온도까지 데우고 유지: 멀면 100%, 가까워지면 PI 제어(유지에 필요한 버너를 천천히 배움)
       const gap = target - st.bt;
@@ -308,6 +327,9 @@ window.AUTO = (() => {
       const eta = gap > 3 && rr > 1 ? ` · 약 ${Math.ceil(gap / rr)}분 예상` : '';
       const prog = `예열 ${Math.floor(preSec / 60)}:${String(Math.floor(preSec % 60)).padStart(2, '0')} · BT ${st.bt}° → 목표 ${target}°` + (gap > 3 ? ` · ${Math.round(gap)}° 남음${eta}` : ' · 도착');
       $('phase').textContent = prog;
+      // soon: 끝나기 약 5분 전(또는 35도 남음, 끝 무렵엔 천천히 올라서 예상 시간이 짧게 나온다) — 이때 TV가 '지금 로스터로 가세요' 하고 알린다 (다 끝나고 알리면 늦다, 사용자 2026-10-10)
+      const etaMin = gap > 3 && rr > 1 ? gap / rr : 0;
+      tvView({ state: 'preheat', bt: st.bt, target, gap, eta: etaMin, sec: preSec, soon: gap <= 35 || (etaMin > 0 && etaMin <= 5), ready: !!readyRung, maxMin: PREHEAT_MAX_MIN });
       if (!holdSince || now - holdSince <= 30000) $('autoMsg').textContent = prog + ` (최대 ${PREHEAT_MAX_MIN}분)`;
       if (now - lastSet > 5000) {
         if (gap > 25) { holdBase = 40; setBurner(100, `예열 BT ${st.bt}° → 목표 ${target}°`); }
@@ -341,7 +363,7 @@ window.AUTO = (() => {
     }
 
     if (phase !== 'roast') return;
-    if (events['배출']) { phase = 'done'; stopUi(); return; }
+    if (events['배출']) { phase = 'done'; stopUi(); return; }   // 배출 뒤엔 cooldown() 이 TV 에 식는 온도를 보낸다
     const s = samples.at(-1), el = s.t - chargeAt, fc = events['1차 크랙'];
 
     // 계획 버너: 부자 프로파일 모드처럼 BT가 단계 온도를 넘으면 그 %로.
