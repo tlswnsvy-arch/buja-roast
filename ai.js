@@ -255,6 +255,16 @@ function renderRec() {
     const rv = (() => { try { return localStorage.getItem('reportVoice') || 'hj-fish'; } catch { return 'hj-fish'; } })();
     const prov = rv.startsWith('hj-') ? rv.slice(3) : '';
     if (!window.DEMO?.on) fetch('http://127.0.0.1:8790/api/roastbrief?p=' + prov + '&t=' + encodeURIComponent(parts.join('¶'))).catch(() => {});
+    const beanLabel = (b.name || '') + (b.amt ? ' ' + b.amt + 'g' : ''), at = Date.parse(r.at || '') || Date.now();
+    hjItem('brief', '레시피 브리핑', parts.join(' ¶ '), beanLabel, at);
+    hjItem('all', '레시피 전체', ['summary', 'settingsTitled', 'flavor', 'watch', 'next'].map(k => say[k]).filter(Boolean).join(' ¶ '), beanLabel, at);
+    hjItem('summary', '요약', say.summary, beanLabel, at);
+    hjItem('settings', '설정값', say.settings, beanLabel, at);
+    hjItem('flavor', '예상 맛', say.flavor, beanLabel, at);
+    hjItem('why', '이렇게 정한 이유', say.why, beanLabel, at);
+    hjItem('watch', '볶는 중 볼 것', say.watch, beanLabel, at);
+    hjItem('next', '다음 배치 실험', say.next, beanLabel, at);
+    hjItem('detail', '자세한 설명', say.detail, beanLabel, at);
   } catch {}
   const read = text => { ALARM.unlock(); ALARM.stopSpeaking?.(); if (text) ALARM.speak(text); };
   $('rec').querySelectorAll('.say').forEach(b => b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); read(say[b.dataset.say]); }));
@@ -466,6 +476,12 @@ patch에 쓸 수 있는 키: charge, startBurner, steps(전체 배열 [{bt,burne
       <div class="recsec"><div class="rech">다음 배치에 반영할 것</div>
       <div class="note">하나만 고르는 걸 추천해요. 잘못 눌렀으면 다시 누르면 취소돼요.</div>
       ${(r.changes || []).map((c, i) => `<div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;padding:6px 0;border-top:1px solid var(--line)"><button data-apply="${i}">적용</button><div><div>${esc(c.label)}</div><div class="note">${esc(c.why)}</div></div></div>`).join('')}</div>`;
+    // ☕ 하집사 다시 듣기에도 (배치 날짜·생두로). 읽어주기 버튼과 같은 글
+    {
+      const sent = s => { s = String(s || '').trim().replace(/[.。\s]+$/, ''); return s ? s + '.' : ''; };
+      const reviewText = [(r.deviation || []).length ? '예상과 달랐던 점. ¶ ' + r.deviation.map(sent).join(' ') : '', '잘된 점. ¶ ' + (r.good || []).map(sent).join(' '), '아쉬운 점. ¶ ' + (r.bad || []).map(sent).join(' '), '다음 배치 선택지. ¶ ' + (r.changes || []).map((c, i) => sent((i + 1) + '번, ' + c.label)).join(' ')].filter(Boolean).join(' ¶ ');
+      hjItem('review', '배치 리뷰', reviewText, (rec.bean?.name || '') + (rec.bean?.amt ? ' ' + rec.bean.amt + 'g' : ''), rec.ts || Date.now());
+    }
     $('readReview').onclick = () => { ALARM.unlock(); ALARM.stopSpeaking?.(); const sent = s => { s = String(s || '').trim().replace(/[.。\s]+$/, ''); return s ? s + '.' : ''; };
       ALARM.speak([(r.deviation || []).length ? '예상과 달랐던 점. ¶ ' + r.deviation.map(sent).join(' ') : '', '잘된 점. ¶ ' + (r.good || []).map(sent).join(' '), '아쉬운 점. ¶ ' + (r.bad || []).map(sent).join(' '), '다음 배치 선택지. ¶ ' + (r.changes || []).map((c, i) => sent((i + 1) + '번, ' + c.label)).join(' ')].filter(Boolean).join(' ¶ ')); };
     // 적용 ↔ 취소: 다시 누르면 그 변경이 바꾼 값만 원래대로
@@ -610,6 +626,20 @@ window.onSample = st => {
   }
   ror.prev = r;
   if (msgs.length && s.t - lastCoach > 8) { lastCoach = s.t; coach(msgs.join('\n')); }
+};
+
+// ☕ 하집사 '로스팅 다시 듣기' (2026-10-11): 이 앱에서 들을 수 있는 글을 날짜·생두와 함께 하집사에 쌓아 둔다.
+// 목소리는 이 앱이 실제로 읽을 때와 같은 규칙(80자 넘으면 📖 리포트 목소리, 아니면 설정 목소리)이라 이미 만든 소리를 그대로 다시 쓴다
+window.hjItem = (k, title, text, bean, at) => {
+  try {
+    if (!text || window.DEMO?.on) return;
+    const flat = String(text).replace(/\s*¶\s*/g, ' ').trim();
+    const lp = (key, d) => { try { return localStorage.getItem(key) ?? d; } catch { return d; } };
+    const mode = flat.length > 80 ? lp('reportVoice', 'hj-fish') : lp('voiceMode', 'hj-eleven');
+    const p = mode.startsWith('hj-') ? mode.slice(3) : '';
+    const q = new URLSearchParams({ k, title, t: text, p, at: String(at || Date.now()), bean: bean || '' });
+    fetch('http://127.0.0.1:8790/api/roastitem?' + q).catch(() => {});
+  } catch {}
 };
 
 window.onMark = async name => {
