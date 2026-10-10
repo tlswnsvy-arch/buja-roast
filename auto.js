@@ -253,7 +253,7 @@ window.AUTO = (() => {
     paused = null; $('resumeBtn').style.display = 'none';
     ALARM.unlock();
     mode = m; target = preheatTo;
-    on = true; adj = 0; handUntil = 0; handBackSaid = true; aiBurner = null; prevBurner = null; prevDrop = null; if (!resuming) window.HANDS = []; setTimeout(handUi); preTestState = 0; roastTestSaid = false; holdSince = 0; preStart = 0; stallSince = 0; maillardSaid = false; damperSaid = false; readyRung = false; prepRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
+    on = true; adj = 0; handUntil = 0; handBackSaid = true; aiBurner = null; prevBurner = null; prevDrop = null; if (!resuming) window.HANDS = []; setTimeout(handUi); preTestState = 0; roastTestSaid = false; roastTestDone = false; holdSince = 0; preStart = 0; stallSince = 0; maillardSaid = false; damperSaid = false; readyRung = false; prepRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
     phase = chargeAt == null ? 'preheat' : 'roast';
     $('autoBanner').style.display = 'block';
     $('autoBanner').textContent = (mode === 'full' ? 'AI 자동 로스팅 중' : `예열 중 (${target}°C)`) + ' · 로스터 옆을 떠나지 마세요 · 문제가 있으면 전체 정지';
@@ -336,7 +336,7 @@ window.AUTO = (() => {
     clearTimeout(doorTimer);
     doorTimer = setTimeout(async () => {
       if (!CONTROL.enabled || !chr || CONTROL.last?.drop === 0) return;
-      await cmdSure('drop', 0);
+      if (!await cmdSure('drop', 0)) { ALARM.ring('배출구가 안 닫혔어요. 직접 닫아 주세요', 2, false); return; }
       log('배출 20초: 원두가 다 빠져서 배출구를 닫았어요 (쿨링은 계속)');
       say('원두가 다 빠져서 배출구를 닫았어요. 쿨링은 계속 돌아요');
     }, DOOR_CLOSE_SEC * 1000);
@@ -372,7 +372,8 @@ window.AUTO = (() => {
   // 🧪 반응 시험 (2026-10-10): 4배치 곡선은 버너가 늘 온도 따라 같은 모양으로 내려가서 버너 효과를 따로 못 쟀다.
   // 일부러 버너를 잠깐 바꾼 기록이 필요하다. 예열 땐 내리기만(안전), 볶는 중엔 건조 구간 30초만 +10%
   const testOn = k => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
-  let preTestState = 0, preTestUntil = 0, roastTestSaid = false;
+  let preTestState = 0, preTestUntil = 0, roastTestSaid = false, roastTestDone = false;
+  const TEST_START = 90, TEST_END = 150, TEST_UP = 20;
   for (const k of ['preTest', 'roastTest']) { const el = document.getElementById(k); if (el) { el.checked = testOn(k); el.onchange = () => { try { localStorage.setItem(k, el.checked ? '1' : '0'); } catch {} }; } }
   let coolSaid = false, coolDropAt = null;
   function cooldown(st) {
@@ -505,7 +506,9 @@ window.AUTO = (() => {
     // AI 보정: TP 뒤~1차 크랙 전, 목표 곡선보다 5도 넘게 늦거나 빠르면 30초마다 10%씩.
     // 첫 실전(2026-10-08)에서 -20%가 끝까지 가서 크랙 뒤 힘이 모자랐으므로 BT 175도 이후엔 -10%까지만 줄인다
     const minAdj = st.bt >= 175 ? -10 : -20;
-    if (!fc && window.TARGET && el > 90 && now - lastAdjAt > 30000) {
+    // 반응 시험 중과 그 뒤 1분은 보정을 멈춘다 (보정이 같이 움직이면 버너 효과를 따로 못 잰다)
+    const testWindow = testOn('roastTest') && !fc && el < TEST_END + 60;
+    if (!fc && !testWindow && window.TARGET && el > 90 && now - lastAdjAt > 30000) {
       const tgt = TARGET.reduce((a, b) => Math.abs(b.t - el) < Math.abs(a.t - el) ? b : a).bt;
       const diff = st.bt - tgt;
       if (diff < -5 && adj < 20) { adj += 10; lastAdjAt = now; log(`자동 보정 +10% (목표보다 ${Math.round(-diff)}도 늦음)`); }
@@ -513,10 +516,13 @@ window.AUTO = (() => {
     }
     adj = Math.max(adj, minAdj);
     if (fc) adj = Math.min(adj, 0);   // 1차 크랙 뒤에는 올리지 않는다 (플릭 방지)
-    // 🧪 볶는 중 반응 시험: 투입 1:30~2:00 (건조 구간) 계획보다 +10% (다음 1배치만, 배출하면 저절로 꺼짐)
-    const roastTest = testOn('roastTest') && !fc && el >= 90 && el < 120;
-    if (roastTest && !roastTestSaid) { roastTestSaid = true; log('🧪 볶는 중 반응 시험: 30초 동안 버너 +10%'); }
-    const v = Math.max(0, Math.min(100, planned + adj + (roastTest ? 10 : 0)));
+    // 🧪 볶는 중 반응 시험: 투입 1:30~2:30 (건조 구간) 계획보다 +20% (다음 1배치만, 배출하면 저절로 꺼짐)
+    // 5번째 배치의 +10%·30초는 배치마다 생기는 차이(분당 2~3도)에 묻혀서, 크게·길게 다시 잰다
+    const roastTest = testOn('roastTest') && !fc && el >= TEST_START && el < TEST_END;
+    if (roastTest && !roastTestSaid) { roastTestSaid = true; log(`🧪 볶는 중 반응 시험: ${TEST_END - TEST_START}초 동안 버너 +${TEST_UP}%`); ALARM.ring(`볶는 중 반응 시험이에요. 1분 동안 버너를 ${TEST_UP} 올려요`, 1, false); }
+    if (roastTest) $('phase').textContent = `🧪 볶는 중 반응 시험 · 버너 +${TEST_UP}% · ${Math.ceil(TEST_END - el)}초 남음`;
+    if (testOn('roastTest') && roastTestSaid && !roastTest && el >= TEST_END && !roastTestDone) { roastTestDone = true; log('🧪 볶는 중 반응 시험 끝'); say('🧪 반응 시험 끝, 레시피대로 이어가요'); }
+    const v = Math.max(0, Math.min(100, planned + adj + (roastTest ? TEST_UP : 0)));
     if (!handOn && v !== burnerNow && now - lastSet > 3000) setBurner(v, `BT ${st.bt}° 계획 ${planned}%${adj ? ` 보정 ${adj > 0 ? '+' : ''}${adj}` : ''}`);
 
     // 구간 표시와 마이야르 시작 안내 (생두가 노래지는 BT 약 150~160도)
