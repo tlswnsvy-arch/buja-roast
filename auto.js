@@ -316,6 +316,7 @@ window.AUTO = (() => {
   // TV(스트리머)에 예열 상태 보여 주기 (2026-10-10): 같은 기기 하집사에 상태만 보낸다. 보기 전용, TV 에서 로스터를 움직일 길은 없다
   let tvLast = 0;
   function tvView(v, now) {
+    if (window.DEMO?.on) return;   // 시연(가짜 로스팅) 중엔 TV·위젯에 안 보낸다 (2026-10-10, TV 가 가짜 예열을 말함)
     if (!now && Date.now() - tvLast < 4000) return; tvLast = Date.now();
     fetch('http://127.0.0.1:8790/api/roastview?d=' + encodeURIComponent(JSON.stringify(v))).catch(() => {});
   }

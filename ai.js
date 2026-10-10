@@ -247,7 +247,7 @@ function renderRec() {
     ].filter(Boolean);
     const rv = (() => { try { return localStorage.getItem('reportVoice') || 'hj-fish'; } catch { return 'hj-fish'; } })();
     const prov = rv.startsWith('hj-') ? rv.slice(3) : '';
-    fetch('http://127.0.0.1:8790/api/roastbrief?p=' + prov + '&t=' + encodeURIComponent(parts.join('¶'))).catch(() => {});
+    if (!window.DEMO?.on) fetch('http://127.0.0.1:8790/api/roastbrief?p=' + prov + '&t=' + encodeURIComponent(parts.join('¶'))).catch(() => {});
   } catch {}
   const read = text => { ALARM.unlock(); ALARM.stopSpeaking?.(); if (text) ALARM.speak(text); };
   $('rec').querySelectorAll('.say').forEach(b => b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); read(say[b.dataset.say]); }));
