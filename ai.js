@@ -192,7 +192,7 @@ function renderRec() {
       <div>${esc(clean(r.summary))}</div>
       ${r.level ? `<div class="recline"><b>배전도</b> ${esc(r.level)}${r.levelWhy ? `<div class="note">${esc(r.levelWhy)}</div>` : ''}</div>` : ''}
       ${r.speed ? `<div class="steps"><span class="step">${esc(r.type)}</span><span class="step">속도 ${esc(r.speed)}</span><span class="step">DT ${esc(r.dtSec)}초</span><span class="step">1차 크랙 뒤 +${esc(r.rise)}도</span></div>` : ''}
-      ${r.approach && !/관점\s*[A-E]/.test(r.approach) ? `<div class="note">${esc(r.approach)}</div>` : ''}
+      ${r.approach && !/관점\s*[A-F]/.test(r.approach) ? `<div class="note">${esc(r.approach)}</div>` : ''}
     </div>
     <div class="recsec" style="border:1px solid #4a3d1d">
       <div class="row"><div class="rech" style="flex:1">로스팅 설정값</div><button class="say" data-say="settings" aria-label="읽어주기">🔊</button>
