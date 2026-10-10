@@ -72,3 +72,33 @@
   $('backupInfo').textContent = last ? `마지막 백업: ${new Date(last).toLocaleString('ko-KR')}` : '아직 백업한 적이 없어요. 한 번 저장해 두세요.';
   $('backupUndo').hidden = !localStorage.getItem('preRestore');
 })();
+
+// 하집사로 배치 기록 보내기 (2026-10-10): 같은 기기 하집사(127.0.0.1:8790) → TV 스트리머 하집사에 복사된다.
+// PC 의 Claude 가 스트리머에서 바로 읽어 분석한다 (태블릿을 PC 에 꽂지 않아도 되게). 기록만, 로스터 명령 없음.
+// 배출 때 한 번, 그 뒤 맛 평가처럼 기록이 바뀌면 그 배치만 다시 보낸다 (1분마다 바뀐 것 확인)
+(() => {
+  const URL_ = 'http://127.0.0.1:8790/api/roastlog';
+  const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36) + s.length; };
+  let busy = false;
+  async function syncRoasts() {
+    if (busy || window.DEMO?.on) return; busy = true;
+    try {
+      const all = JSON.parse(localStorage.getItem('myRoasts') || '[]');
+      const sent = JSON.parse(localStorage.getItem('hjSent') || '{}');
+      for (const r of all) {
+        const ts = r.ts || Date.parse((r.date || '').replace(' ', 'T') + 'Z');
+        if (!ts) continue;
+        const body = JSON.stringify({ ...r, ts }), h = hash(body);
+        if (sent[ts] === h) continue;
+        const res = await fetch(URL_, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body }).catch(() => null);
+        if (!res?.ok) break;   // 하집사가 꺼져 있으면 다음에 다시
+        sent[ts] = h; localStorage.setItem('hjSent', JSON.stringify(sent));
+      }
+    } catch {} finally { busy = false; }
+  }
+  window.syncRoasts = syncRoasts;
+  setTimeout(syncRoasts, 5000);
+  setInterval(syncRoasts, 60000);
+  const origMark2 = window.onMark;
+  window.onMark = async name => { await origMark2?.(name); if (name === '배출') setTimeout(syncRoasts, 5000); };
+})();
