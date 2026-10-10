@@ -72,9 +72,21 @@
   window.onMark = async name => { await origMark?.(name); if (name === '배출') renderLog(); };
 
   // 목소리 설정 (이 기기에 저장)
+  // 🔒 하집사 잠금 번호 (2026-10-11): 목소리를 바꾸거나 돈이 드는 미리 만들기 전에. 하집사가 없거나 잠금이 없으면 그냥 통과
+  window.hjUnlock = async why => {
+    try {
+      const st = await (await fetch('http://127.0.0.1:8790/api/lock/state')).text();
+      if (st !== 'locked') return true;
+      const pin = prompt('🔒 하집사 잠금 번호' + (why ? ' · ' + why : '')); if (pin === null) return false;
+      const ok = await (await fetch('http://127.0.0.1:8790/api/lock/unlock?pin=' + encodeURIComponent(pin))).text();
+      if (ok !== 'ok') { alert('번호가 틀려요'); return false; }
+      return true;
+    } catch { return true; }
+  };
   for (const id of ['voiceMode', 'aiVoice']) {
     try { const v = localStorage.getItem(id); if (v) $(id).value = v; } catch {}
-    $(id).addEventListener('change', () => { try { localStorage.setItem(id, $(id).value); } catch {} });
+    // 목소리 바꾸기는 잠금 번호가 맞아야 (틀리면 원래대로)
+    $(id).addEventListener('change', async () => { const before = (() => { try { return localStorage.getItem(id); } catch { return null; } })(); if (id === 'voiceMode' && !(await window.hjUnlock('읽어주는 목소리 바꾸기'))) { if (before) $(id).value = before; return; } try { localStorage.setItem(id, $(id).value); } catch {} });
   }
   // 로스팅 중 하는 말 미리 녹음: 정해진 안내(배출, 1차 크랙 임박, 버너 N퍼센트, 댐퍼 N칸 …)를 일레븐랩스·Fish Audio 로 각각 한 번씩
   const PREP_FILL = () => { const ul = document.querySelector('.prepHow .prepList'); if (!ul) return; ul.innerHTML = PREP.map(t => '<li>' + t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]) + '</li>').join(''); document.querySelector('.prepHow .prepN').textContent = PREP.length; };
@@ -91,7 +103,9 @@
   if ($('voicePrep')) $('voicePrep').onclick = async () => {
     const b = $('voicePrep'), info = $('voicePrepInfo');
     if (Date.now() - prepArm > 5000) { prepArm = Date.now(); info.textContent = '일레븐랩스 최대 약 1,100자 사용 (이미 녹음된 건 빼고) · Fish Audio 무료. 5초 안에 한 번 더 누르면 시작'; setTimeout(() => { if (Date.now() - prepArm >= 5000) info.textContent = ''; }, 5100); return; }
-    prepArm = 0; b.disabled = true;
+    prepArm = 0;
+    if (!(await window.hjUnlock('안내 소리 미리 만들기'))) return;
+    b.disabled = true;
     const SRC = { saved: '이미 있어요', peer: '불러왔어요', new: '새로 만들었어요' };
     const r = await ALARM.hjPrepare(PREP, ['eleven', 'fish'], (n, total, p, t, s) => { info.textContent = `${n}/${total} · ${p === 'eleven' ? '일레븐랩스' : 'Fish Audio'} · ${t}${s ? ' → ' + SRC[s] : ' …'}`; });
     const c = r.cnt || {};
@@ -137,9 +151,10 @@
   if ($('reportVoiceBtn')) {
     const b = $('reportVoiceBtn'); let hold = null, held = false;
     const start = () => { held = false; hold = setTimeout(() => {
-      held = true; const i = RV.findIndex(x => x[0] === rvNow()); const next = RV[(i + 1) % RV.length];
-      try { localStorage.setItem('reportVoice', next[0]); } catch {}
-      showRv(); try { navigator.vibrate?.(30); } catch {}
+      held = true;
+      window.hjUnlock('리포트 목소리 바꾸기').then(ok => { if (!ok) return; const i = RV.findIndex(x => x[0] === rvNow()); const next = RV[(i + 1) % RV.length];
+        try { localStorage.setItem('reportVoice', next[0]); } catch {}
+        showRv(); try { navigator.vibrate?.(30); } catch {} });
     }, 600); };
     const end = () => { clearTimeout(hold); if (!held) { const t = b.textContent; b.textContent = '길게 누르면 바뀌어요'; setTimeout(showRv, 1500); } };
     b.addEventListener('pointerdown', start); b.addEventListener('pointerup', end); b.addEventListener('pointerleave', () => clearTimeout(hold));
