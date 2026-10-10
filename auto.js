@@ -322,6 +322,8 @@ window.AUTO = (() => {
     say(`${{ drop: '배출구', fan: '쿨링', burner: '버너' }[kind]}를 로스터가 안 받았어요. 직접 눌러 주세요`);
     return false;
   }
+  const DOOR_CLOSE_SEC = 20;   // 배출 뒤 배출구 닫기까지 (원두는 보통 10~20초면 다 빠짐)
+  let doorTimer = null;
   async function doDrop(why) {
     phase = 'done'; aiBurner = 0; handUntil = 0;
     if (testOn('roastTest')) { try { localStorage.setItem('roastTest', '0'); } catch {} const e = document.getElementById('roastTest'); if (e) e.checked = false; log('🧪 볶는 중 반응 시험 기록 완료 (다음 배치부터 꺼짐)'); }
@@ -329,6 +331,15 @@ window.AUTO = (() => {
     if (!cont) await cmdSure('burner', 0);
     await cmdSure('drop', 1);
     await cmdSure('fan', 1);
+    // 원두만 빠지면 배출구를 바로 닫는다 (부자로스터 안내: 열어 두면 드럼 열에 베어링 쪽이 상함). 쿨링은 따로 계속
+    // 예전엔 4분 쿨링이 끝날 때 같이 닫아서, 5번째 배치 때 사용자가 손으로 닫았다
+    clearTimeout(doorTimer);
+    doorTimer = setTimeout(async () => {
+      if (!CONTROL.enabled || !chr || CONTROL.last?.drop === 0) return;
+      await cmdSure('drop', 0);
+      log('배출 20초: 원두가 다 빠져서 배출구를 닫았어요 (쿨링은 계속)');
+      say('원두가 다 빠져서 배출구를 닫았어요. 쿨링은 계속 돌아요');
+    }, DOOR_CLOSE_SEC * 1000);
     if (!events['배출']) mark('배출');
     stopUi();
     $('nextBatch').hidden = false;
@@ -345,7 +356,7 @@ window.AUTO = (() => {
     }
     ALARM.ring('배출했어요', 3, false);   // 로스터 부저는 예열 완료 때 한 번만 (사용자 요청)
     const coolMin = +($('coolMin')?.value || 0);
-    say(`자동 배출 (${why}). 쿨링 켰어요.` + (coolMin ? ` ${coolMin}분 뒤 쿨링을 끄고 배출구를 닫아요` : ' 원두가 식으면 쿨링 끄고 배출구 닫으세요'));
+    say(`자동 배출 (${why}). 쿨링 켰어요. 배출구는 ${DOOR_CLOSE_SEC}초 뒤 닫아요.` + (coolMin ? ` 쿨링은 ${coolMin}분 뒤 꺼요` : ' 원두가 식으면 쿨링을 끄세요'));
     clearTimeout(coolTimer);
     if (coolMin) coolTimer = setTimeout(async () => {
       if (!CONTROL.enabled || !chr) return;
