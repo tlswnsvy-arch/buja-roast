@@ -8,7 +8,7 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>하집사 로스팅</title>
-<link rel="stylesheet" href="style.css?v=20261010o">
+<link rel="stylesheet" href="style.css?v=20261010p">
 <link rel="manifest" href="manifest.json?v=3">
 <link rel="icon" href="icon-192.png?v=2">
 <link rel="apple-touch-icon" href="icon-192.png?v=2">
@@ -68,6 +68,14 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
       <button id="e2C" disabled>2차 크랙</button>
       <button id="eDrop" disabled>배출</button>
     </div>
+    <!-- 수동 조작: 볶는 중 바로 눌러야 해서 그래프 바로 밑 (2026-10-10, 태블릿에서 맨 아래 구석이라 불편). 제어 켜기 했을 때만 보인다 -->
+    <details id="manualBox" class="card manual" open hidden><summary>수동 조작 (버너·쿨링·배출구)</summary>
+      <div id="manualMsg" class="note" style="margin:6px 0">두 번 눌러야 보내져요.</div>
+      <div class="row"><span class="note" style="width:52px">버너</span>
+        <button data-burner="0">0%</button><button data-burner="30">30%</button><button data-burner="50">50%</button><button data-burner="60">60%</button><button data-burner="80">80%</button><button data-burner="100">100%</button></div>
+      <div class="row" style="margin-top:6px"><span class="note" style="width:52px">쿨링</span><button data-fan="1">켜기</button><button data-fan="0">끄기</button>
+        <span class="note" style="width:52px;margin-left:12px">배출구</span><button data-drop="1">열기</button><button data-drop="0">닫기</button></div>
+    </details>
     <div id="events" class="note"></div>
     <button id="nextBatch" class="go" hidden style="font-size:18px;padding:14px">🔁 다음 배치 (같은 레시피로 바로 예열)</button>
     <div class="row" id="damperRow">
@@ -103,13 +111,6 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
           <label class="check"><input type="checkbox" id="roastTest"> 🧪 볶는 중 반응 시험 <span class="note">(다음 1배치만, 1:30~2:00 버너 +10%)</span></label>
         </div>
         <div class="note">버너를 바꾸면 온도가 몇 초 뒤 얼마나 바뀌는지 재서 'RoR 따라가기' 자동 모드를 만들 때 써요. 볶는 중 시험은 한 배치 뒤 저절로 꺼져요.</div>
-        <details><summary>수동 조작 (버너·쿨링·배출구)</summary>
-          <div class="note" style="margin:6px 0">두 번 눌러야 보내져요.</div>
-          <div class="row"><span class="note" style="width:52px">버너</span>
-            <button data-burner="0">0%</button><button data-burner="30">30%</button><button data-burner="50">50%</button><button data-burner="60">60%</button><button data-burner="80">80%</button><button data-burner="100">100%</button></div>
-          <div class="row" style="margin-top:6px"><span class="note" style="width:52px">쿨링</span><button data-fan="1">켜기</button><button data-fan="0">끄기</button>
-            <span class="note" style="width:52px;margin-left:12px">배출구</span><button data-drop="1">열기</button><button data-drop="0">닫기</button></div>
-        </details>
         <div id="ctlMsg" class="note"></div>
       </div>
     </section>
@@ -599,13 +600,13 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=20261010o"></script>
-<script src="control.js?v=20261010o"></script>
-<script src="auto.js?v=20261010o"></script>
-<script src="replay.js?v=20261010o"></script>
-<script src="cupping.js?v=20261010o"></script>
-<script src="backup.js?v=20261010o"></script>
-<script src="ui.js?v=20261010o"></script>
-<script src="demo.js?v=20261010o"></script>
+<script src="ai.js?v=20261010p"></script>
+<script src="control.js?v=20261010p"></script>
+<script src="auto.js?v=20261010p"></script>
+<script src="replay.js?v=20261010p"></script>
+<script src="cupping.js?v=20261010p"></script>
+<script src="backup.js?v=20261010p"></script>
+<script src="ui.js?v=20261010p"></script>
+<script src="demo.js?v=20261010p"></script>
 </body>
 </html>

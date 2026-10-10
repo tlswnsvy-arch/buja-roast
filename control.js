@@ -35,7 +35,7 @@ window.CONTROL = (() => {
     try { await send(frame.buzz(1)); clearTimeout(buzzTimer); buzzTimer = setTimeout(() => send(frame.buzz(0)).catch(() => {}), sec * 1000); } catch {}
   }
 
-  const msg = t => { $('ctlMsg').textContent = t; log('제어: ' + t); };
+  const msg = t => { $('ctlMsg').textContent = t; if ($('manualMsg')) $('manualMsg').textContent = t; log('제어: ' + t); };
 
   async function stopAll(reason) {
     if (window.AUTO) AUTO.cancel(reason);     // 자동 실행 중이면 먼저 멈춘다
@@ -97,6 +97,7 @@ window.CONTROL = (() => {
   $('ctlOn').addEventListener('change', e => {
     enabled = e.target.checked;
     $('ctlBody').style.display = enabled ? 'grid' : 'none';
+    if ($('manualBox')) $('manualBox').hidden = !enabled;
     $('modeTag').textContent = enabled ? '제어 모드' : '읽기 전용';
     $('modeTag').style.color = enabled ? '#ff8a65' : ''; $('modeTag').style.borderColor = enabled ? '#ff8a65' : '';
     msg(enabled ? '제어 켜짐. 로스터 옆을 떠나지 마세요' : '제어 꺼짐 (로스터 상태는 그대로예요)');
