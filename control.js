@@ -103,9 +103,9 @@ window.CONTROL = (() => {
     msg(enabled ? '제어 켜짐. 로스터 옆을 떠나지 마세요' : '제어 꺼짐 (로스터 상태는 그대로예요)');
   });
   $('stopAll').addEventListener('click', () => stopAll('정지 버튼'));
-  document.querySelectorAll('[data-burner]').forEach(b => twoTap(b, () => cmd('burner', +b.dataset.burner)));
+  document.querySelectorAll('[data-burner]').forEach(b => twoTap(b, () => { window.AUTO?.hand('burner', +b.dataset.burner, 'screen'); cmd('burner', +b.dataset.burner); }));
   document.querySelectorAll('[data-fan]').forEach(b => twoTap(b, () => cmd('fan', +b.dataset.fan)));
-  document.querySelectorAll('[data-drop]').forEach(b => twoTap(b, () => cmd('drop', +b.dataset.drop)));
+  document.querySelectorAll('[data-drop]').forEach(b => twoTap(b, () => { cmd('drop', +b.dataset.drop); window.AUTO?.hand('drop', +b.dataset.drop, 'screen'); }));
 
   async function onReconnect() {
     if (pendingStop) { const r = pendingStop; pendingStop = null; await stopAll('다시 연결: ' + r); }

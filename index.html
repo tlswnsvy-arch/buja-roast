@@ -8,7 +8,7 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>하집사 로스팅</title>
-<link rel="stylesheet" href="style.css?v=20261010p">
+<link rel="stylesheet" href="style.css?v=20261010q">
 <link rel="manifest" href="manifest.json?v=3">
 <link rel="icon" href="icon-192.png?v=2">
 <link rel="apple-touch-icon" href="icon-192.png?v=2">
@@ -70,7 +70,12 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
     </div>
     <!-- 수동 조작: 볶는 중 바로 눌러야 해서 그래프 바로 밑 (2026-10-10, 태블릿에서 맨 아래 구석이라 불편). 제어 켜기 했을 때만 보인다 -->
     <details id="manualBox" class="card manual" open hidden><summary>수동 조작 (버너·쿨링·배출구)</summary>
-      <div id="manualMsg" class="note" style="margin:6px 0">두 번 눌러야 보내져요.</div>
+      <div id="manualMsg" class="note" style="margin:6px 0">두 번 눌러야 보내져요. AI 자동 중에 버너를 바꾸면 AI가 1분 동안 버너를 안 건드려요. 배출구를 열면 배출로 처리해요.</div>
+      <div class="row" style="flex-wrap:wrap;gap:8px;margin-bottom:8px">
+        <button id="takeBurner" hidden>✋ 버너는 이제 내가 <span class="note">(배출 타이밍은 AI)</span></button>
+        <button id="takeAll" hidden>✋ 전부 수동으로 <span class="note">(AI 자동 끄기)</span></button>
+        <button id="handBack" class="go" hidden>🤖 AI 다시 맡기기</button>
+      </div>
       <div class="row"><span class="note" style="width:52px">버너</span>
         <button data-burner="0">0%</button><button data-burner="30">30%</button><button data-burner="50">50%</button><button data-burner="60">60%</button><button data-burner="80">80%</button><button data-burner="100">100%</button></div>
       <div class="row" style="margin-top:6px"><span class="note" style="width:52px">쿨링</span><button data-fan="1">켜기</button><button data-fan="0">끄기</button>
@@ -600,13 +605,13 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=20261010p"></script>
-<script src="control.js?v=20261010p"></script>
-<script src="auto.js?v=20261010p"></script>
-<script src="replay.js?v=20261010p"></script>
-<script src="cupping.js?v=20261010p"></script>
-<script src="backup.js?v=20261010p"></script>
-<script src="ui.js?v=20261010p"></script>
-<script src="demo.js?v=20261010p"></script>
+<script src="ai.js?v=20261010q"></script>
+<script src="control.js?v=20261010q"></script>
+<script src="auto.js?v=20261010q"></script>
+<script src="replay.js?v=20261010q"></script>
+<script src="cupping.js?v=20261010q"></script>
+<script src="backup.js?v=20261010q"></script>
+<script src="ui.js?v=20261010q"></script>
+<script src="demo.js?v=20261010q"></script>
 </body>
 </html>

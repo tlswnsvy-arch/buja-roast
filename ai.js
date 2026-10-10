@@ -622,6 +622,8 @@ window.onMark = async name => {
       rec: lastRec && JSON.parse(JSON.stringify({ charge: lastRec.charge, startBurner: lastRec.startBurner, steps: lastRec.steps, drop: lastRec.drop, rise: lastRec.rise, dtSec: lastRec.dtSec, expected: lastRec.expected })),
       tp: events.TP ? `${events.TP.bt}@${mmss(events.TP.t - chargeAt)}` : null,
       curve: samples.filter((_, i) => i % 5 === 0).map(s => [Math.round(s.t - chargeAt), s.bt, s.et, s.burner, s.damper]), damperLog: damperLog.map(d => [Math.round(d.t - chargeAt), d.v]),
+      // ✋ AI 자동 중 사람이 손댄 순간 [초, 무엇, 값, 화면/로스터]
+      hands: (window.HANDS || []).map(h => [Math.round(h.t - chargeAt), h.kind, h.v, h.src]),
     };
     const all = store.get('myRoasts', []); all.push(rec); store.set('myRoasts', all.slice(-100));
     coach('로스팅 기록을 저장했어요. AI 리뷰는 레시피 탭 아래쪽(4. 볶은 뒤)에 나와요.');

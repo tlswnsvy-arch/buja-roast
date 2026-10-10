@@ -178,10 +178,64 @@ window.AUTO = (() => {
   const PREHEAT_MAX_MIN = 20;
   const say = t => { $('autoMsg').textContent = t; log('자동: ' + t); };
 
+  // ✋ 사람이 손댄 것 (2026-10-10): 예전엔 사람이 버너 50%를 눌러도 AI가 3초 뒤 레시피 값(80%)으로 덮어썼다.
+  // 이제 손으로 버너를 바꾸면(화면 수동 조작이든 로스터 본체 버튼이든) 1분 동안 AI가 버너를 안 건드린다. 또 바꾸면 다시 1분.
+  // 손으로 배출구를 열면 배출로 보고 버너 끄기·쿨링·기록까지 한다 (예전엔 모르고 빈 드럼을 계속 데웠다).
+  // 손댄 순간은 배치 기록(hands)에 남겨서 다음 레시피를 만들 때 참고한다
+  const HAND_MS = 60000;
+  let aiBurner = null, aiSent = [], prevBurner = null, prevDrop = null, handUntil = 0, handBackSaid = true;
+  window.HANDS = [];
+  function handUi() {
+    const b = $('handBack'), left = Math.ceil((handUntil - Date.now()) / 1000);
+    if (b) b.hidden = !(on && left > 0);
+    for (const id of ['takeBurner', 'takeAll']) if ($(id)) $(id).hidden = !on;
+    if ($('takeBurner')) $('takeBurner').hidden = !on || handUntil === Infinity;
+    if (on && left > 0 && $('manualMsg')) $('manualMsg').textContent = handUntil === Infinity
+      ? '✋ 버너는 손으로 · AI는 1차 크랙·배출 타이밍과 안내만 맡아요'
+      : `✋ 손 조작 중 · AI가 버너를 ${left}초 동안 안 건드려요`;
+  }
+  function hand(kind, v, src) {
+    if (!on) return;
+    const now = Date.now();
+    HANDS.push({ t: samples.at(-1)?.t ?? 0, kind, v, src, phase });
+    if (kind === 'burner') {
+      burnerNow = v; aiBurner = v;
+      if (handUntil === Infinity) { log(`✋ 손으로 버너 ${v}%`); return handUi(); }   // 이미 "버너는 이제 내가" 모드
+      handUntil = now + HAND_MS; handBackSaid = false;
+      log(`✋ 손으로 버너 ${v}% (${src === 'roaster' ? '로스터 본체' : '화면'}) → AI 버너 1분 쉼`);
+      ALARM.speak(`손으로 버너 ${v}퍼센트. 1분 동안 AI가 버너를 안 건드려요`);
+      handUi();
+    } else if (kind === 'drop' && v === 1 && phase === 'roast' && chargeAt != null && !events['배출']) {
+      log(`✋ 손으로 배출구 열림 (${src === 'roaster' ? '로스터 본체' : '화면'}) → 배출로 처리`);
+      doDrop('손으로 배출구를 열었어요');
+    }
+  }
+  function handBack() {
+    if (!handUntil) return;
+    handUntil = 0; handBackSaid = true; lastSet = 0; lastAdjAt = Date.now(); handUi(); if ($('manualMsg')) $('manualMsg').textContent = '🤖 AI가 다시 버너를 맡았어요';
+    log('✋ AI가 다시 버너를 맡아요'); ALARM.speak('AI가 다시 버너를 맡아요');
+  }
+  $('handBack')?.addEventListener('click', handBack);
+  // 자동 중 수동 전환 (2026-10-10, 사용자: 앞부분은 AI 에게 맡기고 뒷부분만 사람이 세세하게)
+  // 1) 버너만 내가: 끝까지 AI가 버너를 안 건드린다. 1차 크랙 안내·자동 배출·쿨링은 AI가 계속
+  // 2) 전부 내가: AI 자동을 끈다 (버너는 지금 값 그대로, 배출도 사람이). 그래프·기록·식힘 안내는 그대로
+  $('takeBurner')?.addEventListener('click', () => {
+    if (!on) return;
+    handUntil = Infinity; handBackSaid = false; HANDS.push({ t: samples.at(-1)?.t ?? 0, kind: 'takeBurner', v: burnerNow, src: 'screen', phase });
+    log('✋ 여기서부터 버너는 손으로 (AI는 배출 타이밍만)'); ALARM.speak('이제부터 버너는 직접 조절하세요. 배출 타이밍은 AI가 계속 봐요'); handUi();
+  });
+  $('takeAll')?.addEventListener('click', () => {
+    if (!on) return;
+    HANDS.push({ t: samples.at(-1)?.t ?? 0, kind: 'takeAll', v: burnerNow, src: 'screen', phase });
+    cancel('수동으로 전환했어요. 버너는 지금 값 그대로예요. 배출도 직접 하세요');
+    handUntil = 0; handUi(); $('manualMsg').textContent = '✋ 수동 로스팅 중 · 배출 버튼이나 배출구 열기를 직접 누르세요';
+    ALARM.speak('수동으로 바꿨어요. 버너는 지금 그대로고, 배출도 직접 하세요');
+  });
+
   async function setBurner(v, why) {
     v = Math.max(0, Math.min(100, Math.round(v / 5) * 5));
     if (v === burnerNow) return;
-    burnerNow = v; lastSet = Date.now();
+    burnerNow = v; aiBurner = v; lastSet = Date.now(); aiSent.push([v, lastSet]);
     await CONTROL.cmd('burner', v);
     say(`버너 ${v}% · ${why}`);
     if (phase === 'roast' && ALARM.level() === 'all') ALARM.speak(`버너 ${v}퍼센트${adj ? `, 레시피보다 ${Math.abs(adj)} ${adj > 0 ? '높게' : '낮게'}` : ''}`);   // level()만 쓰면 여기서는 없는 함수라 오류였음
@@ -194,7 +248,7 @@ window.AUTO = (() => {
     paused = null; $('resumeBtn').style.display = 'none';
     ALARM.unlock();
     mode = m; target = preheatTo;
-    on = true; adj = 0; preTestState = 0; roastTestSaid = false; holdSince = 0; preStart = 0; stallSince = 0; maillardSaid = false; damperSaid = false; readyRung = false; prepRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
+    on = true; adj = 0; handUntil = 0; handBackSaid = true; aiBurner = null; prevBurner = null; prevDrop = null; if (!resuming) window.HANDS = []; setTimeout(handUi); preTestState = 0; roastTestSaid = false; holdSince = 0; preStart = 0; stallSince = 0; maillardSaid = false; damperSaid = false; readyRung = false; prepRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
     phase = chargeAt == null ? 'preheat' : 'roast';
     $('autoBanner').style.display = 'block';
     $('autoBanner').textContent = (mode === 'full' ? 'AI 자동 로스팅 중' : `예열 중 (${target}°C)`) + ' · 로스터 옆을 떠나지 마세요 · 문제가 있으면 전체 정지';
@@ -222,7 +276,7 @@ window.AUTO = (() => {
   }
 
   function stopUi() {
-    on = false; $('autoAck').checked = false; $('autoBanner').style.display = 'none';
+    on = false; $('autoAck').checked = false; $('autoBanner').style.display = 'none'; handUi();
     try { wake?.release(); } catch {} wake = null;
   }
 
@@ -263,7 +317,7 @@ window.AUTO = (() => {
     return false;
   }
   async function doDrop(why) {
-    phase = 'done';
+    phase = 'done'; aiBurner = 0; handUntil = 0;
     if (testOn('roastTest')) { try { localStorage.setItem('roastTest', '0'); } catch {} const e = document.getElementById('roastTest'); if (e) e.checked = false; log('🧪 볶는 중 반응 시험 기록 완료 (다음 배치부터 꺼짐)'); }
     await cmdSure('burner', 0);
     await cmdSure('drop', 1);
@@ -325,6 +379,15 @@ window.AUTO = (() => {
     cooldown(st);
     if (phase === 'roast' && Date.now() - tvLast > 15000) tvView({ state: 'roast' });
     if (!on) return;
+    // ✋ AI가 보낸 값이 아닌데 버너·배출구가 바뀌었으면 사람이 손댄 것 (명령이 안 먹힌 건 값이 안 바뀌니 여기 안 걸린다)
+    aiSent = aiSent.filter(a => Date.now() - a[1] < 15000);   // 로스터가 늦게 반영한 AI 의 앞 명령은 사람 것으로 보지 않는다
+    if (prevBurner != null && st.burner !== prevBurner && st.burner !== aiBurner && !aiSent.some(a => a[0] === st.burner)) hand('burner', st.burner, 'roaster');
+    if (prevDrop != null && st.drop === 1 && prevDrop !== 1 && phase === 'roast') hand('drop', 1, 'roaster');
+    prevBurner = st.burner; prevDrop = st.drop;
+    if (!on) return;   // 배출로 처리됐으면 여기서 끝
+    const handOn = Date.now() < handUntil;
+    if (!handOn && !handBackSaid) handBack();
+    else if (handOn) handUi();
     burnerNow = st.burner;
     const r = lastRec, now = Date.now();
 
@@ -346,7 +409,7 @@ window.AUTO = (() => {
       if (holdSince && now - holdSince > 15 * 60000) return preheatAbort('준비 완료 뒤 15분 동안 투입이 없어서 예열을 껐어요');
 
       // 🧪 예열 반응 시험: 버너를 40%로 40초 내렸다가 원래대로 (내리는 쪽이라 안전, 예열이 1분쯤 길어진다)
-      if (testOn('preTest') && preTestState === 0 && st.bt >= 140 && st.bt <= 170 && gap > 25) {
+      if (!handOn && testOn('preTest') && preTestState === 0 && st.bt >= 140 && st.bt <= 170 && gap > 25) {
         preTestState = 1; preTestUntil = now + 40000;
         log('🧪 예열 반응 시험 시작: 버너 40% · 40초'); ALARM.ring('예열 반응 시험이에요. 40초 동안 버너를 낮춰요', 1, false);
         setBurner(40, '🧪 예열 반응 시험');
@@ -364,7 +427,7 @@ window.AUTO = (() => {
       const etaMin = gap > 3 && rr > 1 ? gap / rr : 0;
       tvView({ state: 'preheat', bt: st.bt, target, gap, eta: etaMin, sec: preSec, soon: gap <= 35 || (etaMin > 0 && etaMin <= 5), ready: !!readyRung, maxMin: PREHEAT_MAX_MIN });
       if (!holdSince || now - holdSince <= 30000) $('autoMsg').textContent = prog + ` (최대 ${PREHEAT_MAX_MIN}분)`;
-      if (now - lastSet > 5000) {
+      if (!handOn && now - lastSet > 5000) {
         if (gap > 25) { holdBase = 40; setBurner(100, `예열 BT ${st.bt}° → 목표 ${target}°`); }
         else {
           holdBase = Math.max(0, Math.min(85, holdBase + gap * 0.3));
@@ -421,7 +484,7 @@ window.AUTO = (() => {
     const roastTest = testOn('roastTest') && !fc && el >= 90 && el < 120;
     if (roastTest && !roastTestSaid) { roastTestSaid = true; log('🧪 볶는 중 반응 시험: 30초 동안 버너 +10%'); }
     const v = Math.max(0, Math.min(100, planned + adj + (roastTest ? 10 : 0)));
-    if (v !== burnerNow && now - lastSet > 3000) setBurner(v, `BT ${st.bt}° 계획 ${planned}%${adj ? ` 보정 ${adj > 0 ? '+' : ''}${adj}` : ''}`);
+    if (!handOn && v !== burnerNow && now - lastSet > 3000) setBurner(v, `BT ${st.bt}° 계획 ${planned}%${adj ? ` 보정 ${adj > 0 ? '+' : ''}${adj}` : ''}`);
 
     // 구간 표시와 마이야르 시작 안내 (생두가 노래지는 BT 약 150~160도)
     const yellowT = 155;
@@ -470,5 +533,5 @@ window.AUTO = (() => {
   }
   // 다음 단계에서 실제로 보낼 버너 값 (레시피 값 + 지금 보정). 음성 안내가 실제 값과 같게
   const plannedBurner = (stepBurner, bt) => { const min = bt >= 175 ? -10 : -20; return Math.max(0, Math.min(100, stepBurner + Math.max(adj, min))); };
-  return { tick, cancel, offerResume, plannedBurner, get adj() { return adj; }, get on() { return on; } };
+  return { tick, cancel, offerResume, plannedBurner, hand, get adj() { return adj; }, get on() { return on; } };
 })();
