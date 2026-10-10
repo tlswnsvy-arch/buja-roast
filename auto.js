@@ -374,6 +374,14 @@ window.AUTO = (() => {
   const testOn = k => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
   let preTestState = 0, preTestUntil = 0, roastTestSaid = false, roastTestDone = false;
   const TEST_START = 90, TEST_END = 150, TEST_UP = 20;
+  // ☕ 장면 손으로 켜고 끄기: 이 기기 하집사 → TV 하집사
+  const sceneCall = act => { const m = $('sceneMsg'); if (m) m.textContent = '보내는 중...';
+    let music = true; try { music = localStorage.getItem('roastSceneMusic') !== '0'; } catch {}
+    fetch('http://127.0.0.1:8790/api/roastscene?act=' + act + '&music=' + (music ? 1 : 0)).then(r => r.text())
+      .then(t => { if (m) m.textContent = t === 'ok' ? (act === 'on' ? '켰어요. 주방벽등을 보세요' : '원래대로 돌렸어요') : t; })
+      .catch(() => { if (m) m.textContent = '이 기기 하집사에 못 닿았어요. 하집사가 켜져 있는지 봐 주세요'; }); };
+  $('sceneOn')?.addEventListener('click', () => sceneCall('on'));
+  $('sceneOff')?.addEventListener('click', () => sceneCall('off'));
   for (const k of ['roastScene', 'roastSceneMusic']) { const el = document.getElementById(k); if (el) { try { el.checked = localStorage.getItem(k) !== '0'; } catch {} el.onchange = () => { try { localStorage.setItem(k, el.checked ? '1' : '0'); } catch {} }; } }
   for (const k of ['preTest', 'roastTest']) { const el = document.getElementById(k); if (el) { el.checked = testOn(k); el.onchange = () => { try { localStorage.setItem(k, el.checked ? '1' : '0'); } catch {} }; } }
   let coolSaid = false, coolDropAt = null;
