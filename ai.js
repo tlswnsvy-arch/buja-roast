@@ -638,7 +638,8 @@ window.hjItem = (k, title, text, bean, at) => {
     const mode = flat.length > 80 ? lp('reportVoice', 'hj-fish') : lp('voiceMode', 'hj-eleven');
     const p = mode.startsWith('hj-') ? mode.slice(3) : '';
     const q = new URLSearchParams({ k, title, t: text, p, at: String(at || Date.now()), bean: bean || '' });
-    fetch('http://127.0.0.1:8790/api/roastitem?' + q).catch(() => {});
+    // 긴 글(원두 결산)도 잘리지 않게 폼(POST)으로 보낸다
+    fetch('http://127.0.0.1:8790/api/roastitem', { method: 'POST', body: q }).catch(() => {});
   } catch {}
 };
 
