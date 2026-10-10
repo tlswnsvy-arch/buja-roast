@@ -92,8 +92,11 @@
     const b = $('voicePrep'), info = $('voicePrepInfo');
     if (Date.now() - prepArm > 5000) { prepArm = Date.now(); info.textContent = '일레븐랩스 최대 약 1,100자 사용 (이미 녹음된 건 빼고) · Fish Audio 무료. 5초 안에 한 번 더 누르면 시작'; setTimeout(() => { if (Date.now() - prepArm >= 5000) info.textContent = ''; }, 5100); return; }
     prepArm = 0; b.disabled = true;
-    const r = await ALARM.hjPrepare(PREP, ['eleven', 'fish'], (n, total, p, t) => { info.textContent = `만드는 중 ${n}/${total} · ${p === 'eleven' ? '일레븐랩스' : 'Fish Audio'} · ${t}`; });
-    info.textContent = r.down ? '하집사 앱이 꺼져 있어요. 이 기기에서 하집사를 켜고 다시 눌러 주세요' : `미리 녹음 끝 (${r.ok}/${r.total}). 다음부터 이 말들은 바로, 돈 안 들고 나와요`;
+    const SRC = { saved: '이미 있어요', peer: '불러왔어요', new: '새로 만들었어요' };
+    const r = await ALARM.hjPrepare(PREP, ['eleven', 'fish'], (n, total, p, t, s) => { info.textContent = `${n}/${total} · ${p === 'eleven' ? '일레븐랩스' : 'Fish Audio'} · ${t}${s ? ' → ' + SRC[s] : ' …'}`; });
+    const c = r.cnt || {};
+    info.textContent = r.down ? '하집사 앱이 꺼져 있어요. 이 기기에서 하집사를 켜고 다시 눌러 주세요'
+      : `끝났어요 (${r.ok}/${r.total}) · 이미 있음 ${c.saved || 0} · 다른 기기에서 불러옴 ${c.peer || 0} · 새로 만듦 ${c.new || 0}. 다음부터 이 말들은 바로, 돈 안 들고 나와요`;
     b.disabled = false;
   };
   // ▶ 어떻게 되는지 보기: 미리 만들기를 가짜로 보여 준다. 사이트에 안 보내고 저장도 안 한다 (돈 0원, 2026-10-10)

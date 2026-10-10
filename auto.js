@@ -38,13 +38,17 @@ window.ALARM = (() => {
     finally { clearTimeout(t); }
   }
   // 하집사에 미리 녹음 (같은 문장은 하집사가 저장해서 두 번째부터 돈 안 씀)
+  // 하집사에 미리 만들어 두기. 문장마다 어디서 왔는지 센다: saved 이미 있음 · peer 다른 기기에서 불러옴 · new 새로 만듦
   async function hjPrepare(texts, providers, onStep) {
-    let ok = 0, n = 0, total = texts.length * providers.length;
+    let ok = 0, n = 0, total = texts.length * providers.length; const cnt = { saved: 0, peer: 0, new: 0 };
     for (const p of providers) for (const t of texts) {
-      n++; onStep?.(n, total, p, t);
-      try { const r = await fetch(HJ + '?app=roast&provider=' + p + '&text=' + encodeURIComponent(t)); if (r.status === 200) { await r.arrayBuffer(); ok++; } } catch { return { ok, total, down: true }; }
+      n++; onStep?.(n, total, p, t, '');
+      try {
+        const r = await fetch(HJ + '?app=roast&provider=' + p + '&text=' + encodeURIComponent(t));
+        if (r.status === 200) { await r.arrayBuffer(); ok++; const s = r.headers.get('X-Source') || 'new'; cnt[s] = (cnt[s] || 0) + 1; onStep?.(n, total, p, t, s); }
+      } catch { return { ok, total, cnt, down: true }; }
     }
-    return { ok, total };
+    return { ok, total, cnt };
   }
   // 리포트(긴 글, 80자 넘음)는 맨 위 📖 칩의 목소리로 따로 (짧은 안내는 설정의 목소리) — 2026-10-10
   const modeFor = text => String(text).length > 80 ? pref('reportVoice', 'hj-fish') : pref('voiceMode', 'hj-eleven');
