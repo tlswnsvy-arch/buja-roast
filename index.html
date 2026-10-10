@@ -8,7 +8,7 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>하집사 로스팅</title>
-<link rel="stylesheet" href="style.css?v=20261010m">
+<link rel="stylesheet" href="style.css?v=20261010n">
 <link rel="manifest" href="manifest.json?v=3">
 <link rel="icon" href="icon-192.png?v=2">
 <link rel="apple-touch-icon" href="icon-192.png?v=2">
@@ -98,6 +98,11 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
           <select id="coolMin" style="width:auto"><option value="0">손으로 끄기</option><option value="3">3분 뒤 끄기</option><option value="4" selected>4분 뒤 끄기</option><option value="5">5분 뒤 끄기</option></select>
           <label class="check" style="margin-left:12px"><input type="checkbox" id="voiceOn" checked> 🔊 볶는 중 음성 안내</label>
         </div>
+        <div class="row" style="flex-wrap:wrap;gap:6px 14px;margin-top:6px">
+          <label class="check"><input type="checkbox" id="preTest"> 🧪 예열 중 반응 시험 <span class="note">(원두 없을 때, 140~170도에서 버너 40%로 40초)</span></label>
+          <label class="check"><input type="checkbox" id="roastTest"> 🧪 볶는 중 반응 시험 <span class="note">(다음 1배치만, 1:30~2:00 버너 +10%)</span></label>
+        </div>
+        <div class="note">버너를 바꾸면 온도가 몇 초 뒤 얼마나 바뀌는지 재서 'RoR 따라가기' 자동 모드를 만들 때 써요. 볶는 중 시험은 한 배치 뒤 저절로 꺼져요.</div>
         <details><summary>수동 조작 (버너·쿨링·배출구)</summary>
           <div class="note" style="margin:6px 0">두 번 눌러야 보내져요.</div>
           <div class="row"><span class="note" style="width:52px">버너</span>
@@ -594,13 +599,13 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=20261010m"></script>
-<script src="control.js?v=20261010m"></script>
-<script src="auto.js?v=20261010m"></script>
-<script src="replay.js?v=20261010m"></script>
-<script src="cupping.js?v=20261010m"></script>
-<script src="backup.js?v=20261010m"></script>
-<script src="ui.js?v=20261010m"></script>
-<script src="demo.js?v=20261010m"></script>
+<script src="ai.js?v=20261010n"></script>
+<script src="control.js?v=20261010n"></script>
+<script src="auto.js?v=20261010n"></script>
+<script src="replay.js?v=20261010n"></script>
+<script src="cupping.js?v=20261010n"></script>
+<script src="backup.js?v=20261010n"></script>
+<script src="ui.js?v=20261010n"></script>
+<script src="demo.js?v=20261010n"></script>
 </body>
 </html>

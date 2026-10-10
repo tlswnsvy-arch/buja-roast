@@ -194,7 +194,7 @@ window.AUTO = (() => {
     paused = null; $('resumeBtn').style.display = 'none';
     ALARM.unlock();
     mode = m; target = preheatTo;
-    on = true; adj = 0; holdSince = 0; preStart = 0; stallSince = 0; maillardSaid = false; damperSaid = false; readyRung = false; prepRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
+    on = true; adj = 0; preTestState = 0; roastTestSaid = false; holdSince = 0; preStart = 0; stallSince = 0; maillardSaid = false; damperSaid = false; readyRung = false; prepRung = false; fcWarned = false; stepIdx = 0; burnerNow = CONTROL.last.burner;
     phase = chargeAt == null ? 'preheat' : 'roast';
     $('autoBanner').style.display = 'block';
     $('autoBanner').textContent = (mode === 'full' ? 'AI 자동 로스팅 중' : `예열 중 (${target}°C)`) + ' · 로스터 옆을 떠나지 마세요 · 문제가 있으면 전체 정지';
@@ -264,6 +264,7 @@ window.AUTO = (() => {
   }
   async function doDrop(why) {
     phase = 'done';
+    if (testOn('roastTest')) { try { localStorage.setItem('roastTest', '0'); } catch {} const e = document.getElementById('roastTest'); if (e) e.checked = false; log('🧪 볶는 중 반응 시험 기록 완료 (다음 배치부터 꺼짐)'); }
     await cmdSure('burner', 0);
     await cmdSure('drop', 1);
     await cmdSure('fan', 1);
@@ -285,6 +286,11 @@ window.AUTO = (() => {
   // 배출 뒤 식히기: BT·ET가 모두 80도 아래로 내려가면 "기계 꺼도 돼요" (부자로스터 대표 권장: 80도 이하에서 끄기)
   const COOL_OFF = 80;
   let coolHist = [], coolHistAt = null, coolStart = 0;
+  // 🧪 반응 시험 (2026-10-10): 4배치 곡선은 버너가 늘 온도 따라 같은 모양으로 내려가서 버너 효과를 따로 못 쟀다.
+  // 일부러 버너를 잠깐 바꾼 기록이 필요하다. 예열 땐 내리기만(안전), 볶는 중엔 건조 구간 30초만 +10%
+  const testOn = k => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
+  let preTestState = 0, preTestUntil = 0, roastTestSaid = false;
+  for (const k of ['preTest', 'roastTest']) { const el = document.getElementById(k); if (el) { el.checked = testOn(k); el.onchange = () => { try { localStorage.setItem(k, el.checked ? '1' : '0'); } catch {} }; } }
   let coolSaid = false, coolDropAt = null;
   function cooldown(st) {
     const d = events['배출'];
@@ -337,6 +343,17 @@ window.AUTO = (() => {
       if (st.burner >= 70 && gap > 5 && rr != null && rr < 1) { if (!stallSince) stallSince = now; } else stallSince = 0;
       if (stallSince && now - stallSince > 180000) return preheatAbort(`버너를 세게 넣는데 3분째 온도가 안 올라요 (BT ${st.bt}°). 히터나 센서를 확인하세요`);
       if (holdSince && now - holdSince > 15 * 60000) return preheatAbort('준비 완료 뒤 15분 동안 투입이 없어서 예열을 껐어요');
+
+      // 🧪 예열 반응 시험: 버너를 40%로 40초 내렸다가 원래대로 (내리는 쪽이라 안전, 예열이 1분쯤 길어진다)
+      if (testOn('preTest') && preTestState === 0 && st.bt >= 140 && st.bt <= 170 && gap > 25) {
+        preTestState = 1; preTestUntil = now + 40000;
+        log('🧪 예열 반응 시험 시작: 버너 40% · 40초'); ALARM.ring('예열 반응 시험이에요. 40초 동안 버너를 낮춰요', 1, false);
+        setBurner(40, '🧪 예열 반응 시험');
+      }
+      if (preTestState === 1) {
+        if (now < preTestUntil) { $('phase').textContent = `🧪 예열 반응 시험 중 · BT ${st.bt}° · ${Math.ceil((preTestUntil - now) / 1000)}초 남음`; tvView({ state: 'preheat', bt: st.bt, target, gap, eta: 0, sec: preSec, soon: false, ready: false }); return; }
+        preTestState = 2; lastSet = 0; log('🧪 예열 반응 시험 끝'); say('🧪 반응 시험 끝, 예열을 계속해요');
+      }
 
       // 예열 진행 표시: 경과 시간 · 남은 온도 · 예상 시간
       const eta = gap > 3 && rr > 1 ? ` · 약 ${Math.ceil(gap / rr)}분 예상` : '';
@@ -399,7 +416,10 @@ window.AUTO = (() => {
     }
     adj = Math.max(adj, minAdj);
     if (fc) adj = Math.min(adj, 0);   // 1차 크랙 뒤에는 올리지 않는다 (플릭 방지)
-    const v = Math.max(0, Math.min(100, planned + adj));
+    // 🧪 볶는 중 반응 시험: 투입 1:30~2:00 (건조 구간) 계획보다 +10% (다음 1배치만, 배출하면 저절로 꺼짐)
+    const roastTest = testOn('roastTest') && !fc && el >= 90 && el < 120;
+    if (roastTest && !roastTestSaid) { roastTestSaid = true; log('🧪 볶는 중 반응 시험: 30초 동안 버너 +10%'); }
+    const v = Math.max(0, Math.min(100, planned + adj + (roastTest ? 10 : 0)));
     if (v !== burnerNow && now - lastSet > 3000) setBurner(v, `BT ${st.bt}° 계획 ${planned}%${adj ? ` 보정 ${adj > 0 ? '+' : ''}${adj}` : ''}`);
 
     // 구간 표시와 마이야르 시작 안내 (생두가 노래지는 BT 약 150~160도)
