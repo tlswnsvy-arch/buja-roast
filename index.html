@@ -186,6 +186,13 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
       <div class="row"><h2 style="flex:1">배치 기록</h2><button id="save">지금 곡선 CSV 저장</button></div>
       <div id="logTable" class="note">아직 이 화면으로 볶은 기록이 없어요.</div>
     </section>
+    <section class="card" id="brCard">
+      <h2>📑 원두 결산</h2>
+      <div class="note">한 생두를 여러 번 볶았으면, 배치마다 무엇을 바꿨고 결과와 맛이 어떻게 달라졌는지 AI가 한 장으로 정리해요. 생두 한 봉을 다 볶았을 때 만들면 좋아요.</div>
+      <div class="row"><select id="brBean" style="flex:1;min-width:0"></select><button id="brMake" class="go">결산 만들기</button></div>
+      <div id="brWarn"></div>
+      <div id="brOut"></div>
+    </section>
     <section class="card" id="replayCard" hidden>
       <div class="row"><h2 style="flex:1" id="replayTitle">재생</h2><button id="replayClose">닫기</button></div>
       <canvas id="replayChart" style="height:min(50vh,520px)"></canvas>
@@ -616,6 +623,7 @@ draw();
 <script src="replay.js?v=20261011c"></script>
 <script src="cupping.js?v=20261011c"></script>
 <script src="backup.js?v=20261011c"></script>
+<script src="beanreport.js?v=2"></script>
 <script src="ui.js?v=20261011c"></script>
 <script src="demo.js?v=20261011c"></script>
 </body>

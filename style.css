@@ -293,3 +293,19 @@ button.go { background:linear-gradient(180deg, #3a9a4a, #2b7d39); border-color:#
 .pdSaved { margin-top:8px; font-size:13px; line-height:1.7; }
 .pdBtns { display:flex; gap:8px; margin-top:14px; } .pdBtns button { flex:1; height:44px; border-radius:12px; border:0; background:#ECE8E0; color:#161616; font-weight:700; font-size:15px; }
 .pdBtns .pdAgain { background:#E07A1F; color:#fff; }
+
+/* 📑 원두 결산 */
+.brWarn { margin-top:8px; padding:10px 12px; border-radius:10px; font-size:14px; line-height:1.6; color:#ffe2a8; background:rgba(255,216,138,.10); border:1px solid rgba(255,216,138,.4); }
+.brPaper { margin-top:10px; padding:16px; border-radius:14px; background:var(--card2); border:1px solid var(--line); display:grid; gap:10px; }
+.brPaper h3 { font-size:19px; text-wrap:balance; }
+.brPaper h4 { margin:6px 0 0; font-size:15px; color:var(--gold); }
+.brPaper p, .brPaper ul { margin:0; line-height:1.7; }
+.brPaper ul { padding-left:20px; }
+.brOne { font-size:16px; font-weight:600; }
+.brChart { padding:8px 4px 0; }
+.brScroll { overflow-x:auto; }
+.brTbl { min-width:560px; }
+.brTbl td { vertical-align:top; }
+.brTbl tr.brNote td { padding-top:0; color:var(--dim); font-size:13.5px; border-top:none; }
+.brBadge { display:inline-block; padding:3px 9px; border-radius:999px; color:#111; font-size:12.5px; font-weight:700; white-space:nowrap; }
+.brRecipe { padding:10px 12px; border-radius:10px; background:rgba(255,216,138,.08); border:1px solid rgba(255,216,138,.35); font-variant-numeric:tabular-nums; }
