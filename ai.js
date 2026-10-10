@@ -623,6 +623,10 @@ window.onMark = async name => {
       tp: events.TP ? `${events.TP.bt}@${mmss(events.TP.t - chargeAt)}` : null,
       curve: samples.filter((_, i) => i % 5 === 0).map(s => [Math.round(s.t - chargeAt), s.bt, s.et, s.burner, s.damper]), damperLog: damperLog.map(d => [Math.round(d.t - chargeAt), d.v]),
       // ✋ AI 자동 중 사람이 손댄 순간 [초, 무엇, 값, 화면/로스터]
+      // 🔁 몇 번째 배치인지 (앞 배출 뒤 40분 안에 다시 볶으면 이어진 배치로 센다) · 앞 배출 뒤 몇 분 만인지
+      ...(() => { const now = Date.now(), p = store.get('lastDropInfo', null), gap = p ? (now - p.at) / 60000 : null;
+        const seq = gap != null && gap < 40 ? p.seq + 1 : 1; store.set('lastDropInfo', { at: now, seq });
+        return { seq, prevDropMin: gap != null && gap < 40 ? +gap.toFixed(1) : null }; })(),
       hands: (window.HANDS || []).map(h => [Math.round(h.t - chargeAt), h.kind, h.v, h.src]),
     };
     const all = store.get('myRoasts', []); all.push(rec); store.set('myRoasts', all.slice(-100));

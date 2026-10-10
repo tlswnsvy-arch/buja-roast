@@ -183,6 +183,11 @@ window.AUTO = (() => {
   // 손으로 배출구를 열면 배출로 보고 버너 끄기·쿨링·기록까지 한다 (예전엔 모르고 빈 드럼을 계속 데웠다).
   // 손댄 순간은 배치 기록(hands)에 남겨서 다음 레시피를 만들 때 참고한다
   const HAND_MS = 60000;
+  // 🔁 연속 배치 (2026-10-10): 체크하면 배출 때 버너를 끄지 않고 30초 뒤(원두가 다 떨어진 뒤) 다음 예열을 이어간다.
+  // 그 사이 레시피를 다른 생두로 바꾸면 예열 목표도 새 레시피 투입 온도로 바뀐다. 마지막 배치 땐 끄면 예전처럼 버너 0
+  let contTimer = null;
+  const contOn = () => { try { return localStorage.getItem('contBatch') === '1'; } catch { return false; } };
+  { const c = $('contBatch'); if (c) { c.checked = contOn(); c.onchange = () => { try { localStorage.setItem('contBatch', c.checked ? '1' : '0'); } catch {} }; } }
   let aiBurner = null, aiSent = [], prevBurner = null, prevDrop = null, handUntil = 0, handBackSaid = true;
   window.HANDS = [];
   function handUi() {
@@ -292,6 +297,7 @@ window.AUTO = (() => {
   }
 
   function cancel(reason) {
+    if (contTimer) { clearTimeout(contTimer); contTimer = null; log('🔁 연속 배치 예약 취소'); }
     if (!on) return;
     // 실수로 홈으로 나간 경우: 돌아오면 이어갈 수 있게 기억해 둔다 (밖에 있는 동안은 버너 0 그대로)
     if (/화면 벗어남/.test(reason || '') && !events['배출']) paused = { mode, target, at: Date.now() };
@@ -319,12 +325,24 @@ window.AUTO = (() => {
   async function doDrop(why) {
     phase = 'done'; aiBurner = 0; handUntil = 0;
     if (testOn('roastTest')) { try { localStorage.setItem('roastTest', '0'); } catch {} const e = document.getElementById('roastTest'); if (e) e.checked = false; log('🧪 볶는 중 반응 시험 기록 완료 (다음 배치부터 꺼짐)'); }
-    await cmdSure('burner', 0);
+    const cont = contOn() && mode === 'full';
+    if (!cont) await cmdSure('burner', 0);
     await cmdSure('drop', 1);
     await cmdSure('fan', 1);
     if (!events['배출']) mark('배출');
     stopUi();
     $('nextBatch').hidden = false;
+    if (cont) {
+      log('🔁 연속 배치: 버너 그대로, 30초 뒤 다음 예열');
+      setTimeout(() => ALARM.speak('연속 배치예요. 30초 뒤 다음 예열을 이어가요. 그만하려면 전체 정지를 누르세요'), 2500);
+      contTimer = setTimeout(() => {
+        contTimer = null;
+        if (!CONTROL.enabled || !chr || on || !lastRec?.charge) return;
+        if (!newBatch()) return;
+        $('autoAck').checked = true;
+        begin('full', +lastRec.charge);
+      }, 30000);
+    }
     ALARM.ring('배출했어요', 3, false);   // 로스터 부저는 예열 완료 때 한 번만 (사용자 요청)
     const coolMin = +($('coolMin')?.value || 0);
     say(`자동 배출 (${why}). 쿨링 켰어요.` + (coolMin ? ` ${coolMin}분 뒤 쿨링을 끄고 배출구를 닫아요` : ' 원두가 식으면 쿨링 끄고 배출구 닫으세요'));
@@ -392,6 +410,10 @@ window.AUTO = (() => {
     const r = lastRec, now = Date.now();
 
     if (phase === 'preheat') {
+      if (mode === 'full' && lastRec?.charge && +lastRec.charge !== target) {
+        log(`🔁 레시피가 바뀌어서 예열 목표 ${target}° → ${+lastRec.charge}°`); ALARM.speak(`레시피가 바뀌어서 예열 목표를 ${+lastRec.charge}도로 바꿔요`);
+        target = +lastRec.charge; holdSince = 0; readyRung = false; prepRung = false; lastSet = 0;
+      }
       if (chargeAt != null) {
         if (mode === 'preheat') { cancel('투입 감지. 예열만 모드라 여기서부터는 손으로 조절하세요'); return; }
         phase = 'roast'; tvView({ state: 'roast' }, true); setBurner(r.startBurner ?? 100, '투입 감지: 시작 버너'); return;
