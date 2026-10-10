@@ -632,7 +632,7 @@ window.onSample = st => {
 // 목소리는 이 앱이 실제로 읽을 때와 같은 규칙(80자 넘으면 📖 리포트 목소리, 아니면 설정 목소리)이라 이미 만든 소리를 그대로 다시 쓴다
 window.hjItem = (k, title, text, bean, at) => {
   try {
-    if (!text || window.DEMO?.on) return;
+    if (!text || !bean || window.DEMO?.on) return;   // 생두 이름 없이는 보내지 않는다 (어느 날 무엇인지 모르게 된다)
     const flat = String(text).replace(/\s*¶\s*/g, ' ').trim();
     const lp = (key, d) => { try { return localStorage.getItem(key) ?? d; } catch { return d; } };
     const mode = flat.length > 80 ? lp('reportVoice', 'hj-fish') : lp('voiceMode', 'hj-eleven');
