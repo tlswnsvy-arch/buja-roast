@@ -8,7 +8,7 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>하집사 로스팅</title>
-<link rel="stylesheet" href="style.css?v=20261010x">
+<link rel="stylesheet" href="style.css?v=20261010y">
 <link rel="manifest" href="manifest.json?v=3">
 <link rel="icon" href="icon-192.png?v=2">
 <link rel="apple-touch-icon" href="icon-192.png?v=2">
@@ -110,8 +110,6 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
           <span class="note" style="margin-left:12px">배출 뒤 쿨링</span>
           <select id="coolMin" style="width:auto"><option value="0">손으로 끄기</option><option value="3">3분 뒤 끄기</option><option value="4" selected>4분 뒤 끄기</option><option value="5">5분 뒤 끄기</option></select>
           <label class="check" style="margin-left:12px" title="배출 뒤 버너를 끄지 않고 30초 뒤 같은 레시피(또는 그 사이 바꾼 레시피)의 투입 온도로 바로 예열해요. 마지막 배치 때는 끄세요"><input type="checkbox" id="contBatch"> 🔁 연속 배치 <span class="note">(배출 뒤 버너 안 끄고 바로 다음 예열)</span></label>
-          <label class="check" style="margin-left:12px"><input type="checkbox" id="roastScene" checked> ☕ 로스팅 장면 <span class="note">(예열 시작하면 TV 하집사가 주방벽등 켜기, 다 식으면 원래대로)</span></label>
-          <label class="check" style="margin-left:12px"><input type="checkbox" id="roastSceneMusic" checked> 🎵 장면 음악 <span class="note">(TV 에서 카페 재즈, 이미 듣는 음악이 있으면 안 바꿔요)</span></label>
           <label class="check" style="margin-left:12px"><input type="checkbox" id="voiceOn" checked> 🔊 볶는 중 음성 안내</label>
         </div>
         <div class="row" style="flex-wrap:wrap;gap:6px 14px;margin-top:6px">
@@ -225,6 +223,12 @@ try { const r = sessionStorage.getItem("__demoSnap"); if (r) { const s = JSON.pa
       </div>
       <label class="row" style="gap:8px"><input type="checkbox" id="autoBackup" style="width:auto"> 볶을 때마다 자동 백업 (배출 뒤 이 기기 다운로드 폴더에 저장)</label>
       <span class="note" id="backupInfo"></span>
+    </section>
+    <section class="card">
+      <h2>☕ 로스팅 장면</h2>
+      <div class="note">예열을 시작하면 TV 하집사가 주방벽등을 80%로 켜고 TV에서 음악을 틀어요. 다 식거나 예열을 멈추면 조명을 원래대로 돌리고 음악을 멈춰요. 로스터는 건드리지 않아요.</div>
+      <label class="row" style="gap:8px"><input type="checkbox" id="roastScene" style="width:auto" checked> 로스팅 장면 쓰기 (주방벽등)</label>
+      <label class="row" style="gap:8px"><input type="checkbox" id="roastSceneMusic" style="width:auto" checked> 장면 음악도 (TV에서 카페 재즈, 이미 듣는 음악이 있으면 안 바꿔요)</label>
     </section>
     <section class="card">
       <h2>설정</h2>
@@ -612,13 +616,13 @@ if (location.search.includes('demo')) {
 }
 draw();
 </script>
-<script src="ai.js?v=20261010x"></script>
-<script src="control.js?v=20261010x"></script>
-<script src="auto.js?v=20261010x"></script>
-<script src="replay.js?v=20261010x"></script>
-<script src="cupping.js?v=20261010x"></script>
-<script src="backup.js?v=20261010x"></script>
-<script src="ui.js?v=20261010x"></script>
-<script src="demo.js?v=20261010x"></script>
+<script src="ai.js?v=20261010y"></script>
+<script src="control.js?v=20261010y"></script>
+<script src="auto.js?v=20261010y"></script>
+<script src="replay.js?v=20261010y"></script>
+<script src="cupping.js?v=20261010y"></script>
+<script src="backup.js?v=20261010y"></script>
+<script src="ui.js?v=20261010y"></script>
+<script src="demo.js?v=20261010y"></script>
 </body>
 </html>
