@@ -374,6 +374,7 @@ window.AUTO = (() => {
   const testOn = k => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
   let preTestState = 0, preTestUntil = 0, roastTestSaid = false, roastTestDone = false;
   const TEST_START = 90, TEST_END = 150, TEST_UP = 20;
+  for (const k of ['roastScene', 'roastSceneMusic']) { const el = document.getElementById(k); if (el) { try { el.checked = localStorage.getItem(k) !== '0'; } catch {} el.onchange = () => { try { localStorage.setItem(k, el.checked ? '1' : '0'); } catch {} }; } }
   for (const k of ['preTest', 'roastTest']) { const el = document.getElementById(k); if (el) { el.checked = testOn(k); el.onchange = () => { try { localStorage.setItem(k, el.checked ? '1' : '0'); } catch {} }; } }
   let coolSaid = false, coolDropAt = null;
   function cooldown(st) {
@@ -402,6 +403,9 @@ window.AUTO = (() => {
   function tvView(v, now) {
     if (window.DEMO?.on) return;   // 시연(가짜 로스팅) 중엔 TV·위젯에 안 보낸다 (2026-10-10, TV 가 가짜 예열을 말함)
     if (!now && Date.now() - tvLast < 4000) return; tvLast = Date.now();
+    // ☕ 로스팅 장면 (TV 하집사가 주방벽등·음악): 설정 체크를 같이 보낸다
+    const flag = k => { try { return localStorage.getItem(k) !== '0'; } catch { return true; } };
+    v = { ...v, scene: flag('roastScene'), music: flag('roastSceneMusic') };
     fetch('http://127.0.0.1:8790/api/roastview?d=' + encodeURIComponent(JSON.stringify(v))).catch(() => {});
   }
   window.TVVIEW = tvView;
