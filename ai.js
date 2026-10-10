@@ -173,7 +173,7 @@ function renderRec() {
   const o = r.orig;
   const origOf = k => { if (!o) return null; const m = k.match(/^s([0-9]+)(bt|burner)$/); return m ? o.steps?.[+m[1]]?.[m[2]] : o[k]; };
   const num = (k, v) => { const ov = origOf(k), ch = ov != null && +ov !== +v;
-    return `<span class="numwrap"><input class="recnum${ch ? ' chg' : ''}" data-k="${k}" type="number" value="${esc(v)}" style="width:64px;padding:4px 6px;display:inline-block">${ch ? `<small class="aiorig">AI ${esc(ov)}</small>` : ''}</span>`; };
+    return `<span class="numwrap"><input class="recnum${ch ? ' chg' : ''}" data-k="${k}" type="number" value="${esc(v)}" style="width:64px;padding:4px 6px;display:inline-block">${ch ? `<small class="aiorig">원래 ${esc(ov)}</small>` : ''}</span>`; };
   const changed = o && JSON.stringify(recSnap(r)) !== JSON.stringify(o);
   $('rec').style.whiteSpace = 'normal';
   const list = arr => (arr || []).length ? '<ul>' + arr.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '';
@@ -191,7 +191,7 @@ function renderRec() {
       <div class="row"><div class="rech" style="flex:1">로스팅 설정값</div><button class="say" data-say="settings" aria-label="읽어주기">🔊</button>
         <button id="verBtn">🕘 변경 기록${hist > 1 ? ' (' + hist + ')' : ''}</button></div>
       <div class="note">숫자를 눌러 바로 고칠 수 있어요. 자동 로스팅이 이 값으로 볶아요.</div>
-      ${changed ? `<div class="chgnote row"><span style="flex:1">✏️ 금색 칸은 AI 추천에서 바뀐 값이에요. 칸 아래 작은 글씨가 AI가 처음 추천한 값이에요.</span><button id="toOrig">AI 추천값으로</button></div>` : (r.edited && !r.orig ? '<div class="chgnote">✏️ 예전에 직접 고친 값이 들어 있어요. 무엇이 바뀌었는지는 🕘 변경 기록에서 볼 수 있어요.</div>' : '')}
+      ${changed ? `<div class="chgnote row"><span style="flex:1">✏️ AI 추천에서 바뀐 값: <b>${esc(recDiff(r.orig, r))}</b>${r.lastChange ? '' : ''}<br><span class="note">금색 칸이 바뀐 값이고, 칸 아래 "원래"가 바꾸기 전 AI 추천값이에요.</span></span><button id="toOrig">AI 추천값으로</button></div>` : (r.edited && !r.orig ? '<div class="chgnote">✏️ 예전에 직접 고친 값이 들어 있어요. 무엇이 바뀌었는지는 🕘 변경 기록에서 볼 수 있어요.</div>' : '')}
       <div id="verPanel" hidden></div>
       <div class="steps">
         <span class="step">투입 ${num('charge', r.charge)}°C</span>
