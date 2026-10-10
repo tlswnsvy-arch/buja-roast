@@ -251,11 +251,22 @@ window.AUTO = (() => {
     ALARM.ring('화면을 벗어나서 버너를 껐어요. 이어가려면 자동 이어가기를 누르세요', 2);
   });
 
+  // 로스터가 정말 바꿨는지 확인하며 하나씩 보낸다 (2026-10-10: 배출구가 자동으로 안 열리고 안 닫힘.
+  // 버너·배출구·쿨링을 쉬지 않고 연달아 보내면 블루투스가 앞 명령을 처리하는 중이라 뒤 명령이 빠질 수 있다)
+  async function cmdSure(kind, v, tries = 4) {
+    for (let i = 0; i < tries; i++) {
+      await CONTROL.cmd(kind, v);
+      for (let w = 0; w < 12; w++) { await new Promise(r => setTimeout(r, 250)); if (CONTROL.last && CONTROL.last[kind] === v) return true; }
+      log(`${kind} ${v} 확인 안 됨 → 다시 보냄 (${i + 2}번째)`);
+    }
+    say(`${{ drop: '배출구', fan: '쿨링', burner: '버너' }[kind]}를 로스터가 안 받았어요. 직접 눌러 주세요`);
+    return false;
+  }
   async function doDrop(why) {
     phase = 'done';
-    await CONTROL.cmd('burner', 0);
-    await CONTROL.cmd('drop', 1);
-    await CONTROL.cmd('fan', 1);
+    await cmdSure('burner', 0);
+    await cmdSure('drop', 1);
+    await cmdSure('fan', 1);
     if (!events['배출']) mark('배출');
     stopUi();
     $('nextBatch').hidden = false;
@@ -265,7 +276,7 @@ window.AUTO = (() => {
     clearTimeout(coolTimer);
     if (coolMin) coolTimer = setTimeout(async () => {
       if (!CONTROL.enabled || !chr) return;
-      await CONTROL.cmd('fan', 0); await CONTROL.cmd('drop', 0);
+      await cmdSure('fan', 0); await cmdSure('drop', 0);
       ALARM.ring('쿨링 끝났어요', 2, false);
       say('쿨링 끄고 배출구 닫았어요. 로스팅 끝!');
     }, coolMin * 60000);
